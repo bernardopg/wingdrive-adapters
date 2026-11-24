@@ -37,3 +37,29 @@ jobs:
         run: |
           cd tools
           uv run --python 3.12 --with jsonschema python -m wingreg validate --previous ../previous/index.json
+
+  adapter-tests:
+    name: Official adapter tests (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+        python: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: Run each adapter's tests
+        shell: bash
+        run: |
+          status=0
+          for tests in adapters/*/tests; do
+            [ -d "$tests" ] || continue
+            echo "::group::${tests%/tests}"
+            uv run --no-project --python "${{ matrix.python }}" python -m unittest discover -s "$tests" -t "$tests" || status=1
+            echo "::endgroup::"
+          done
+          exit $status

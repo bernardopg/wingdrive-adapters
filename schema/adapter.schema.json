@@ -3,7 +3,7 @@
   "$id": "https://github.com/bernardopg/wingdrive-adapters/schema/adapter.schema.json",
   "title": "WingDrive adapter manifest (adapter.toml, contract 1)",
   "type": "object",
-  "required": ["adapter"],
+  "required": ["adapter", "data_type", "models", "search"],
   "properties": {
     "adapter": {
       "type": "object",
@@ -61,8 +61,26 @@
         "config": { "type": "array", "items": { "type": "object" } }
       }
     },
-    "data_type": { "type": "object" },
-    "models": { "type": "object" },
-    "search": { "type": "object" }
+    "data_type": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{1,40}$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 60 }
+      }
+    },
+    "models": { "type": "object", "minProperties": 1 },
+    "search": {
+      "type": "object",
+      "required": ["primary_model", "title", "preview", "search_fields"],
+      "properties": {
+        "primary_model": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "title": { "type": "string", "minLength": 1 },
+        "preview": { "type": "string", "minLength": 1 },
+        "subtitle": { "type": "string", "minLength": 1 },
+        "search_fields": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "date_field": { "type": "string", "minLength": 1 }
+      }
+    }
   }
 }

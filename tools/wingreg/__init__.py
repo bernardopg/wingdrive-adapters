@@ -172,9 +172,27 @@ def load_adapter(entry: dict, directory: Path) -> Adapter:
                 adapter.problems.append(f"{entry['id']}: README.md needs a '{section}' section")
     if not any((directory / name).is_file() for name in ("LICENSE", "LICENSE.md", "LICENSE.txt")) and entry["source"]["type"] == "git":
         adapter.problems.append(f"{entry['id']}: LICENSE file is missing")
+    adapter.problems += _search_problems(entry["id"], manifest)
     if not (directory / "tests").is_dir():
         adapter.problems.append(f"{entry['id']}: tests/ is missing")
     return adapter
+
+
+def _search_problems(adapter_id: str, manifest: dict) -> list[str]:
+    """The daemon refuses a [search] block that names a model or field the manifest lacks."""
+    search = manifest.get("search") or {}
+    model = (manifest.get("models") or {}).get(search.get("primary_model"))
+    if model is None:
+        return [f"{adapter_id}: search.primary_model {search.get('primary_model')!r} is not a model"]
+    fields = set((model.get("fields") or {}).keys())
+    problems = []
+    for key in ("title", "preview", "subtitle", "date_field"):
+        if key in search and search[key] not in fields:
+            problems.append(f"{adapter_id}: search.{key} {search[key]!r} is not a field of {search['primary_model']}")
+    for name in search.get("search_fields", []):
+        if name not in fields and not name.startswith("_derived."):
+            problems.append(f"{adapter_id}: search.search_fields {name!r} is not a field of {search['primary_model']}")
+    return problems
 
 
 def _version_tuple(version: str) -> tuple[int, ...]:
