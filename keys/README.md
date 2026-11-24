@@ -8,6 +8,9 @@ WingDrive build ships both public keys below and accepts an index signed by eith
 | `active.pub` | Signs every published index | `MINISIGN_SECRET_KEY` in the `registry-publish` environment, plus an offline backup with the maintainer |
 | `standby.pub` | Takes over if the active key is lost or leaked | Offline only, with the maintainer; never in CI |
 
+The maintainer keeps both private keys in a `.keys/` folder of their checkout, which `.gitignore`
+excludes, and a backup in their password manager.
+
 Verify a published index:
 
 ```bash

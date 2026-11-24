@@ -3,3 +3,7 @@ __pycache__/
 /dist/
 /previous/
 .venv/
+
+# Private signing keys kept by the maintainer (backup in the password manager). Never commit.
+/.keys/
+*.key
