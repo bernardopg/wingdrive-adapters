@@ -1,0 +1,39 @@
+# Checks every registry entry and the adapter it points at. Runs on pull requests, including
+# pull requests from forks, so it gets no secret that can write to the repository or sign.
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Registry checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: Tooling tests
+        run: uv run --python 3.12 --with jsonschema python -m unittest discover -s tests
+      - name: Last published index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern index.json --dir previous 2>/dev/null \
+            || echo "No published index yet"
+      - name: Entries and adapters
+        run: |
+          cd tools
+          uv run --python 3.12 --with jsonschema python -m wingreg validate --previous ../previous/index.json

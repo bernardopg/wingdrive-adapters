@@ -1,0 +1,72 @@
+# Builds the archives and the index from main, signs the index with the active registry key and
+# publishes them as a release. The signing key lives only in the `registry-publish` environment,
+# which needs the maintainer's approval for every run and only accepts the main branch.
+name: Publish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - registry/**
+      - adapters/**
+      - revoked.json
+      - schema/**
+      - tools/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build, sign and release the index
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: registry-publish
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: Install minisign
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+      - name: Sequence
+        id: seq
+        run: echo "sequence=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Build
+        env:
+          SEQUENCE: ${{ steps.seq.outputs.sequence }}
+        run: |
+          cd tools
+          uv run --python 3.12 --with jsonschema python -m wingreg build \
+            --out ../dist --sequence "$SEQUENCE" \
+            --base-url "https://github.com/$GITHUB_REPOSITORY/releases/download/index-$SEQUENCE/"
+      - name: Sign
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          SEQUENCE: ${{ steps.seq.outputs.sequence }}
+        run: |
+          test -n "$MINISIGN_SECRET_KEY"
+          umask 077
+          key=$(mktemp)
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$MINISIGN_SECRET_KEY" > "$key"
+          minisign -S -s "$key" -m dist/index.json -t "wingdrive-adapters index $SEQUENCE"
+          minisign -V -p keys/active.pub -m dist/index.json
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SEQUENCE: ${{ steps.seq.outputs.sequence }}
+        run: |
+          count=$(jq '.adapters | length' dist/index.json)
+          gh release create "index-$SEQUENCE" dist/* \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest \
+            --title "Index $SEQUENCE" \
+            --notes "Signed adapter index $SEQUENCE with $count adapter(s). Verify with \`minisign -V -p keys/active.pub -m index.json\`."

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bernardopg/wingdrive-adapters/schema/entry.schema.json",
+  "title": "WingDrive registry entry (registry/<id>.json)",
+  "description": "Where an adapter comes from and how far it is trusted. Everything else (name, summary, version, permissions) is read from the adapter.toml at the pinned source.",
+  "type": "object",
+  "required": ["id", "trust", "source"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,38}[a-z0-9]$" },
+    "trust": { "enum": ["official", "verified", "community"] },
+    "source": {
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "An official adapter kept in this repository.",
+          "required": ["type", "path"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "local" },
+            "path": { "type": "string", "pattern": "^adapters/[a-z][a-z0-9-]{1,38}[a-z0-9]$" }
+          }
+        },
+        {
+          "type": "object",
+          "description": "A third-party adapter pinned to a reviewed commit of its own repository.",
+          "required": ["type", "repository", "tag", "commit"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "git" },
+            "repository": { "type": "string", "pattern": "^https://github\\.com/[A-Za-z0-9-]+/[A-Za-z0-9._-]+$" },
+            "tag": { "type": "string", "minLength": 1, "maxLength": 64 },
+            "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+            "path": { "type": "string", "pattern": "^[A-Za-z0-9_./-]*$" }
+          }
+        }
+      ]
+    },
+    "maintainers": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "pattern": "^[A-Za-z0-9-]{1,39}$" }
+    }
+  }
+}
