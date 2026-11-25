@@ -25,6 +25,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: false # nothing to cache: the tools use only jsonschema
       - name: Tooling tests
         run: uv run --python 3.12 --with jsonschema python -m unittest discover -s tests
       - name: Last published index
@@ -52,6 +54,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: false # nothing to cache: the tools use only jsonschema
       - name: Run each adapter's tests
         shell: bash
         run: |
