@@ -223,7 +223,13 @@ def sync(payload):
     written = 0
     try:
         for rid, repo, relation in list_repos(client, username, bool(token), flag(config, "include_starred", True)):
-            stamp = f"{relation}|{repo.get('pushed_at')}|{repo.get('updated_at')}|{repo.get('stargazers_count')}"
+            # Stars and `updated_at` change whenever someone stars a popular repository; only what
+            # the record shows apart from the star count decides whether it is written again.
+            stamp = json.dumps(
+                [relation, repo.get("pushed_at"), repo.get("description"), repo.get("topics"),
+                 repo.get("language"), repo.get("archived"), repo.get("private"), repo.get("full_name")],
+                separators=(",", ":"),
+            )
             if rid in seen:
                 continue  # an owned repository the account also starred
             seen[rid] = stamp

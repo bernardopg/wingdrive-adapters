@@ -173,6 +173,16 @@ class GitHubTest(unittest.TestCase):
         self.assertEqual(third.upserts, {})
         self.assertEqual(third.deletes, [])
 
+    def test_new_stars_alone_do_not_rewrite_a_repository(self):
+        self.public_account()
+        first = self.run_adapter({"username": "ana"})
+        self.server.routes["/users/ana/starred"] = [[
+            repo(10, "lib", owner="carol", stargazers_count=999, updated_at="2025-09-09T00:00:00Z"),
+            repo(1, "tool"),
+        ]]
+        second = self.run_adapter({"username": "ana"}, first.cursor)
+        self.assertEqual(second.upserts, {})
+
     def test_starred_can_be_left_out(self):
         self.public_account()
         run = self.run_adapter({"username": "ana", "include_starred": "false"})
