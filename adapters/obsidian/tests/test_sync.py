@@ -263,6 +263,24 @@ class Detect(unittest.TestCase):
             )
 
 
+class DetectConfined(unittest.TestCase):
+    def test_inside_the_sandbox_missing_folders_are_still_offered(self):
+        with tempfile.TemporaryDirectory() as home:
+            config = pathlib.Path(home) / ".config" / "obsidian"
+            config.mkdir(parents=True)
+            (config / "obsidian.json").write_text(json.dumps({"vaults": {"1": {"path": "/not/mounted/Vault", "ts": 1}}}))
+            env = {"PATH": os.environ.get("PATH", ""), "HOME": home, "USERPROFILE": home,
+                   "WINGDRIVE_ADAPTER_ISOLATION": "bubblewrap"}
+            if sys.platform == "win32":
+                env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", "")
+            result = subprocess.run(
+                [sys.executable, "-I", str(ENTRY)],
+                input=json.dumps({"contract": 1, "mode": "detect", "config": {}, "cursor": None, "data_dir": None}),
+                capture_output=True, text=True, encoding="utf-8", env=env, check=False,
+            )
+            self.assertEqual(result.stdout.strip(), json.dumps({"suggest": {"vault_path": ["/not/mounted/Vault"]}}))
+
+
 class Errors(unittest.TestCase):
     def test_missing_vault_fails_with_a_message(self):
         result, ops = run("/no/such/vault")

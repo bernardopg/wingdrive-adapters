@@ -32,7 +32,13 @@ schedule = "*/15 * * * *"
 detect = true
 
 [adapter.permissions]
-read = ["{config.vault_path}", "~/.config/obsidian/obsidian.json"]
+read = [
+  "{config.vault_path}",
+  "~/.config/obsidian/obsidian.json",
+  "~/.var/app/md.obsidian.Obsidian/config/obsidian/obsidian.json",
+  "~/snap/obsidian/current/.config/obsidian/obsidian.json",
+  "~/Library/Application Support/obsidian/obsidian.json",
+]
 
 [[adapter.config]]
 key = "vault_path"

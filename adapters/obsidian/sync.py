@@ -395,9 +395,12 @@ def detect():
         for vault in known.values():
             if isinstance(vault, dict) and isinstance(vault.get("path"), str):
                 vaults.append((vault.get("ts") or 0, vault["path"]))
+    # Inside WingDrive's sandbox the vault folders are not mounted during detection, so their
+    # existence can only be checked outside it.
+    confined = os.environ.get("WINGDRIVE_ADAPTER_ISOLATION") == "bubblewrap"
     paths = []
     for _, path in sorted(vaults, key=lambda v: v[0] if isinstance(v[0], (int, float)) else 0, reverse=True):
-        if os.path.isdir(path) and path not in paths:
+        if path not in paths and (confined or os.path.isdir(path)):
             paths.append(path)
     if paths:
         emit({"suggest": {"vault_path": paths}})
