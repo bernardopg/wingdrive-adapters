@@ -1,0 +1,86 @@
+# `/wingbot` commands in pull request comments. Only maintainers (owner, members and
+# collaborators) can run them; anyone else gets an explanation. Runs the default branch's code
+# and never checks out the pull request.
+#
+#   /wingbot recheck          run Validate again for the pull request's current commit
+#   /wingbot publish          approve and merge, then start Publish (which still waits for the
+#                             registry-publish environment's approval)
+#   /wingbot reject <reason>  close the pull request with the reason
+name: Wingbot commands
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: wingbot-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  command:
+    name: Wingbot command
+    if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/wingbot')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Wingbot token
+        id: app
+        if: vars.WINGBOT_APP_ID != ''
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          app-id: ${{ vars.WINGBOT_APP_ID }}
+          private-key: ${{ secrets.WINGBOT_PRIVATE_KEY }}
+          permission-issues: write
+          permission-pull-requests: write
+      - name: Run the command
+        env:
+          BOT_TOKEN: ${{ steps.app.outputs.token || github.token }}
+          REPO_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.issue.number }}
+          BODY: ${{ github.event.comment.body }}
+          AUTHOR: ${{ github.event.comment.user.login }}
+          ASSOCIATION: ${{ github.event.comment.author_association }}
+        run: |
+          say() { GH_TOKEN="$BOT_TOKEN" gh api -X POST "repos/$REPO/issues/$PR/comments" -f body="$1" > /dev/null; }
+          line=$(printf '%s\n' "$BODY" | head -n 1 | tr -d '\r')
+          command=$(printf '%s' "$line" | awk '{print $2}')
+          reason=$(printf '%s' "$line" | cut -d' ' -f3- -s)
+          case "$ASSOCIATION" in
+            OWNER|MEMBER|COLLABORATOR) ;;
+            *)
+              say "@$AUTHOR only maintainers can run \`/wingbot\` commands. A maintainer reviews every pull request; push a new commit and Wingbot checks it again on its own."
+              exit 0 ;;
+          esac
+          case "$command" in
+            recheck)
+              sha=$(GH_TOKEN="$REPO_TOKEN" gh api "repos/$REPO/pulls/$PR" -q .head.sha)
+              run=$(GH_TOKEN="$REPO_TOKEN" gh run list -R "$REPO" --workflow validate.yml --commit "$sha" -L 1 --json databaseId -q '.[0].databaseId')
+              if [ -z "$run" ]; then say "No Validate run found for \`${sha:0:12}\`."; exit 0; fi
+              GH_TOKEN="$REPO_TOKEN" gh run rerun "$run" -R "$REPO"
+              say "Running the checks again for \`${sha:0:12}\`." ;;
+            publish)
+              state=$(GH_TOKEN="$REPO_TOKEN" gh pr view "$PR" -R "$REPO" --json mergeStateStatus -q .mergeStateStatus)
+              if [ "$state" != "CLEAN" ] && [ "$state" != "HAS_HOOKS" ]; then
+                say "Not publishing: the pull request is \`$state\`. Every check must pass first."
+                exit 0
+              fi
+              GH_TOKEN="$BOT_TOKEN" gh api -X POST "repos/$REPO/issues/$PR/labels" -f "labels[]=approved" > /dev/null
+              GH_TOKEN="$REPO_TOKEN" gh pr merge "$PR" -R "$REPO" --squash
+              # A merge made with GITHUB_TOKEN does not start push workflows, so start Publish here.
+              GH_TOKEN="$REPO_TOKEN" gh workflow run publish.yml -R "$REPO" --ref main
+              say "Merged by @$AUTHOR. Publish started; it waits for the \`registry-publish\` approval before signing the index." ;;
+            reject)
+              if [ -z "$reason" ]; then say "Usage: \`/wingbot reject <reason>\`"; exit 0; fi
+              GH_TOKEN="$BOT_TOKEN" gh api -X POST "repos/$REPO/issues/$PR/labels" -f "labels[]=needs-changes" > /dev/null
+              say "Closed by @$AUTHOR: $reason"
+              GH_TOKEN="$REPO_TOKEN" gh pr close "$PR" -R "$REPO" ;;
+            *)
+              say "Unknown command \`$command\`. Commands: \`/wingbot recheck\`, \`/wingbot publish\`, \`/wingbot reject <reason>\`." ;;
+          esac
