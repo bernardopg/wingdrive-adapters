@@ -27,6 +27,11 @@ REGISTRY_URL = "https://github.com/bernardopg/wingdrive-adapters"
 ICON_MAX_BYTES = 64 * 1024
 EXCLUDED = {"__pycache__", ".git", ".github", ".pytest_cache", "target", "node_modules"}
 REQUIRED_README_SECTIONS = ("## Setup", "## Data", "## Privacy")
+# Translated READMEs (README.<lang>.md) keep the same three sections, in their language.
+TRANSLATED_README_SECTIONS = {
+    "pt": ("## Configuração", "## Dados", "## Privacidade"),
+    "es": ("## Configuración", "## Datos", "## Privacidad"),
+}
 
 
 class RegistryError(Exception):
@@ -175,6 +180,16 @@ def load_adapter(entry: dict, directory: Path) -> Adapter:
         for section in REQUIRED_README_SECTIONS:
             if section not in text:
                 adapter.problems.append(f"{entry['id']}: README.md needs a '{section}' section")
+    for translated in sorted(directory.glob("README.*.md")):
+        lang = translated.name[len("README."):-len(".md")]
+        sections = TRANSLATED_README_SECTIONS.get(lang)
+        if sections is None:
+            adapter.problems.append(f"{entry['id']}: {translated.name} is in a language the store does not show yet")
+            continue
+        text = translated.read_text()
+        for section in sections:
+            if section not in text:
+                adapter.problems.append(f"{entry['id']}: {translated.name} needs a '{section}' section")
     if not any((directory / name).is_file() for name in ("LICENSE", "LICENSE.md", "LICENSE.txt")) and entry["source"]["type"] == "git":
         adapter.problems.append(f"{entry['id']}: LICENSE file is missing")
     adapter.problems += _search_problems(entry["id"], manifest)

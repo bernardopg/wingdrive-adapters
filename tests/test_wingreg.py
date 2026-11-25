@@ -209,6 +209,13 @@ class RegistryTests(unittest.TestCase):
         message = wingreg.announcement(None, {"sequence": 8, "adapters": [item], "revoked": []})
         self.assertEqual(message["embeds"][0]["thumbnail"]["url"], "https://example.test/index-8/sample-1.0.0.png")
 
+    def test_translated_readme_keeps_the_three_sections(self) -> None:
+        root = make_registry(self.tmp / "reg")
+        (root / "adapters/sample/README.pt.md").write_text("# Exemplo\n\n## Configuração\n\nx\n\n## Dados\n\nx\n")
+        self.assertTrue(any("README.pt.md needs a '## Privacidade'" in p for p in wingreg.validate(root)))
+        (root / "adapters/sample/README.pt.md").write_text("# Exemplo\n\n## Configuração\n\n## Dados\n\n## Privacidade\n")
+        self.assertEqual(wingreg.validate(root), [])
+
     def test_compiled_adapters_wait_for_the_build_workflow(self) -> None:
         manifest = MANIFEST.replace('kind = "python3"\nentry = "sync.py"', 'kind = "binary"\nentry = "bin/sample"')
         root = make_registry(self.tmp / "reg", manifest)

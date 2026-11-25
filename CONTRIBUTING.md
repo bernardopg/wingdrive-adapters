@@ -23,6 +23,9 @@
   summary = "Até 140 caracteres."
   description = "Texto longo da página de detalhes."
   ```
+
+  A translated `README.<lang>.md` (for now `README.pt.md`, with `## Configuração`, `## Dados` and
+  `## Privacidade`) is shown on that language's page of wingdrive.org.
 - You tagged the commit you want published.
 
 ## The entry
