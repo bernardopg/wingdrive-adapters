@@ -8,7 +8,7 @@ its frontmatter tags and aliases, inline #tags, folder, dates and word count, an
 notes it points at through [[wikilinks]] or Markdown links. Syncs read only the notes that \
 changed and remove the ones you deleted. Nothing leaves your computer.\
 """
-version = "1.1.0"
+version = "1.1.1"
 author = "WingDrive"
 license = "Apache-2.0"
 homepage = "https://github.com/bernardopg/wingdrive-adapters/tree/main/adapters/obsidian"
@@ -16,6 +16,12 @@ icon = "icon.svg"
 contract = 1
 platforms = ["linux", "macos", "windows"]
 categories = ["notes"]
+
+[adapter.i18n.pt]
+summary = "Busque no seu cofre do Obsidian: notas com tags, aliases e os links entre elas."
+description = """
+Lê todas as notas Markdown de um cofre do Obsidian, ou de qualquer pasta de arquivos Markdown. Cada nota guarda as tags e os aliases do frontmatter, as #tags no texto, a pasta, as datas e a contagem de palavras, e se liga às notas que cita por [[wikilinks]] ou links Markdown. As sincronizações leem só as notas que mudaram e removem as que você apagou. Nada sai do seu computador.
+"""
 
 [adapter.runtime]
 kind = "python3"
@@ -26,7 +32,13 @@ schedule = "*/15 * * * *"
 detect = true
 
 [adapter.permissions]
-read = ["{config.vault_path}", "~/.config/obsidian/obsidian.json"]
+read = [
+  "{config.vault_path}",
+  "~/.config/obsidian/obsidian.json",
+  "~/.var/app/md.obsidian.Obsidian/config/obsidian/obsidian.json",
+  "~/snap/obsidian/current/.config/obsidian/obsidian.json",
+  "~/Library/Application Support/obsidian/obsidian.json",
+]
 
 [[adapter.config]]
 key = "vault_path"

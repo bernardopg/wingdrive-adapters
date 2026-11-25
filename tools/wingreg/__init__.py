@@ -27,6 +27,11 @@ REGISTRY_URL = "https://github.com/bernardopg/wingdrive-adapters"
 ICON_MAX_BYTES = 64 * 1024
 EXCLUDED = {"__pycache__", ".git", ".github", ".pytest_cache", "target", "node_modules"}
 REQUIRED_README_SECTIONS = ("## Setup", "## Data", "## Privacy")
+# Translated READMEs (README.<lang>.md) keep the same three sections, in their language.
+TRANSLATED_README_SECTIONS = {
+    "pt": ("## Configuração", "## Dados", "## Privacidade"),
+    "es": ("## Configuración", "## Datos", "## Privacidad"),
+}
 
 
 class RegistryError(Exception):
@@ -175,6 +180,16 @@ def load_adapter(entry: dict, directory: Path) -> Adapter:
         for section in REQUIRED_README_SECTIONS:
             if section not in text:
                 adapter.problems.append(f"{entry['id']}: README.md needs a '{section}' section")
+    for translated in sorted(directory.glob("README.*.md")):
+        lang = translated.name[len("README."):-len(".md")]
+        sections = TRANSLATED_README_SECTIONS.get(lang)
+        if sections is None:
+            adapter.problems.append(f"{entry['id']}: {translated.name} is in a language the store does not show yet")
+            continue
+        text = translated.read_text()
+        for section in sections:
+            if section not in text:
+                adapter.problems.append(f"{entry['id']}: {translated.name} needs a '{section}' section")
     if not any((directory / name).is_file() for name in ("LICENSE", "LICENSE.md", "LICENSE.txt")) and entry["source"]["type"] == "git":
         adapter.problems.append(f"{entry['id']}: LICENSE file is missing")
     adapter.problems += _search_problems(entry["id"], manifest)
@@ -217,9 +232,19 @@ def version_problems(adapters: list[Adapter], previous: dict | None) -> list[str
         now, then = _version_tuple(adapter.meta["version"]), _version_tuple(before["version"])
         if now < then:
             problems.append(f"{adapter.id}: version {adapter.meta['version']} is lower than the published {before['version']}")
-        elif now == then and adapter.entry["source"] != before["source_entry"]:
+        elif now == then and (
+            adapter.entry["source"] != before["source_entry"] or _archive_changed(adapter, before)
+        ):
             problems.append(f"{adapter.id}: the source changed, so the version must increase from {before['version']}")
     return problems
+
+
+def _archive_changed(adapter: Adapter, before: dict) -> bool:
+    """The files differ from the published archive, so users of that version would not see them."""
+    published = [a.get("sha256") for a in before.get("artifacts", []) if a.get("target") == "any"]
+    if not published:
+        return False
+    return sha256(pack(adapter.directory, adapter.id)) != published[0]
 
 
 def pack(directory: Path, prefix: str) -> bytes:
@@ -245,6 +270,22 @@ def pack(directory: Path, prefix: str) -> bytes:
                     info.mode = 0o755 if path.stat().st_mode & 0o111 else 0o644
                     tar.addfile(info, io.BytesIO(data))
     return buffer.getvalue()
+
+
+PNG_SIZE = 256
+
+
+def render_png(svg: bytes) -> bytes:
+    """The icon as a 256 px PNG, for places that do not show SVG (Discord, link previews)."""
+    result = subprocess.run(
+        ["rsvg-convert", "--width", str(PNG_SIZE), "--height", str(PNG_SIZE), "--keep-aspect-ratio", "--format", "png"],
+        input=svg,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout.startswith(b"\x89PNG"):
+        raise RegistryError(f"rsvg-convert could not render the icon: {result.stderr.decode(errors='replace').strip()}")
+    return result.stdout
 
 
 def sha256(data: bytes) -> str:
@@ -289,6 +330,9 @@ def build_index(root: Path, out: Path, sequence: int, base_url: str, workdir: Pa
         icon_name = f"{adapter.id}-{meta['version']}.svg"
         icon = (adapter.directory / meta["icon"]).read_bytes()
         (out / icon_name).write_bytes(icon)
+        png_name = f"{adapter.id}-{meta['version']}.png"
+        png = render_png(icon)
+        (out / png_name).write_bytes(png)
         source = dict(adapter.entry["source"])
         if source["type"] == "local":
             source["commit"] = _run("git", "rev-parse", "HEAD", cwd=root).strip()
@@ -310,7 +354,12 @@ def build_index(root: Path, out: Path, sequence: int, base_url: str, workdir: Pa
                 "permissions": meta.get("permissions", {}),
                 "source": source,
                 "source_entry": adapter.entry["source"],
-                "icon": {"url": base_url + icon_name, "sha256": sha256(icon)},
+                "icon": {
+                    "url": base_url + icon_name,
+                    "sha256": sha256(icon),
+                    "png": {"url": base_url + png_name, "sha256": sha256(png), "size": PNG_SIZE},
+                },
+                "i18n": meta.get("i18n", {}),
                 "artifacts": [{"target": "any", "url": base_url + archive_name, "sha256": sha256(archive), "size": len(archive)}],
             }
         )
@@ -332,6 +381,13 @@ def build_index(root: Path, out: Path, sequence: int, base_url: str, workdir: Pa
 def validate(root: Path = ROOT, previous: dict | None = None) -> list[str]:
     with tempfile.TemporaryDirectory() as tmp:
         adapters, problems = collect(root, Path(tmp))
+        for adapter in adapters:
+            icon = adapter.directory / adapter.meta.get("icon", "")
+            if icon.is_file():
+                try:
+                    render_png(icon.read_bytes())
+                except RegistryError as error:
+                    problems.append(f"{adapter.id}: {error}")
     return problems + version_problems(adapters, previous)
 
 
@@ -399,6 +455,7 @@ def report(root: Path, previous: dict | None, workdir: Path) -> str:
 
 # ── Announcements ───────────────────────────────────────────────────────────
 
+WINGBOT_AVATAR = "https://raw.githubusercontent.com/bernardopg/wingdrive-adapters/main/assets/wingbot.png"
 TRUST_LABELS = {"official": "Official", "verified": "Verified", "community": "Community"}
 
 
@@ -413,30 +470,39 @@ def announcement(previous: dict | None, current: dict) -> dict | None:
         title = f"{item['name']} {item['version']}" + (" is new in the store" if not old else f" (was {old['version']})")
         permissions = item.get("permissions", {})
         access = "; ".join(f"{kind}: {', '.join(permissions[kind])}" for kind in PERMISSION_KINDS if permissions.get(kind))
-        embeds.append({
+        png = (item.get("icon") or {}).get("png")
+        embed = {
+            **({"thumbnail": {"url": png["url"]}} if png else {}),
             "title": title[:256],
             "url": item.get("homepage") or REGISTRY_URL,
             "description": item.get("summary", "")[:400],
             "color": 0x7C5CFF if not old else 0x3B82F6,
+            "author": {"name": item.get("author", "")} if item.get("author") else None,
+            "footer": {"text": f"Signed index {current.get('sequence')} · wingdrive.org/adapters"},
             "fields": [
                 {"name": "Trust", "value": TRUST_LABELS.get(item.get("trust"), item.get("trust", "")), "inline": True},
                 {"name": "Install", "value": f"`wing adapters install {item['id']}`", "inline": True},
-                {"name": "Access", "value": (access or "none")[:1024], "inline": False},
+                {"name": "Access", "value": (access or "none: works offline")[:1024], "inline": False},
             ],
-        })
+        }
+        embeds.append({key: value for key, value in embed.items() if value is not None})
     old_revoked = {(r["id"], v) for r in (previous or {}).get("revoked", []) for v in r.get("versions", [])}
     for revocation in current.get("revoked", []):
         versions = [v for v in revocation.get("versions", []) if (revocation["id"], v) not in old_revoked]
         if versions:
             embeds.append({
                 "title": f"{revocation['id']} {', '.join(versions)} revoked"[:256],
-                "description": revocation.get("reason", "")[:400],
+                "description": (
+                    "WingDrive disables this version on every install. Reason: " + revocation.get("reason", "")
+                )[:400],
                 "color": 0xEF4444,
+                "footer": {"text": f"Signed index {current.get('sequence')}"},
             })
     if not embeds:
         return None
     return {
         "username": "Wingbot",
+        "avatar_url": WINGBOT_AVATAR,
         "content": f"Adapter store index {current.get('sequence')}",
         "embeds": embeds[:10],
         "allowed_mentions": {"parse": []},

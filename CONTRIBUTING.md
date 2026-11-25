@@ -4,8 +4,9 @@
 
 - Your adapter lives in a public GitHub repository with a license, a README and tests.
 - `adapter.toml` declares contract 1 and every permission the adapter uses: paths it reads,
-  network hosts it contacts, secrets it needs and tools it runs. Undeclared access fails review and
-  is blocked at run time. A `read` path can name a config field, `"{config.vault_path}"`, when
+  network hosts it contacts, secrets it needs and tools it runs. Undeclared access fails review. On
+  Linux it also fails at run time: the adapter runs in a sandbox where undeclared paths do not exist
+  and, without declared hosts, there is no network. macOS and Windows do not confine adapters yet. A `read` path can name a config field, `"{config.vault_path}"`, when
   the adapter reads the folder the user picks there.
 - `adapter.toml` speaks the contract in
   [`docs/core/adapters.mdx`](https://github.com/bernardopg/wingdrive/blob/main/docs/core/adapters.mdx):
@@ -14,6 +15,17 @@
 - `README.md` has `## Setup`, `## Data` and `## Privacy` sections.
 - The icon is a square SVG under 64 KB, without scripts.
 - The summary fits in two lines (140 characters).
+- Optionally translate the store texts. The app and wingdrive.org show them to users of that
+  language:
+
+  ```toml
+  [adapter.i18n.pt]
+  summary = "Até 140 caracteres."
+  description = "Texto longo da página de detalhes."
+  ```
+
+  A translated `README.<lang>.md` (for now `README.pt.md`, with `## Configuração`, `## Dados` and
+  `## Privacidade`) is shown on that language's page of wingdrive.org.
 - You tagged the commit you want published.
 
 ## The entry
@@ -39,7 +51,8 @@ commit. The tag must keep pointing at that commit.
 
 ## Updates
 
-Open a pull request that moves `tag` and `commit` and raise `version` in `adapter.toml`. The
+Open a pull request that moves `tag` and `commit` and raise `version` in `adapter.toml`. Any change to
+the files of a published version needs a new version, even for official adapters kept here. The
 review shows the diff since the last published commit. An update that asks for new permissions
 makes the app ask every user again before installing it.
 

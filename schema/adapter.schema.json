@@ -59,7 +59,21 @@
             "tools": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,40}$" } }
           }
         },
-        "config": { "type": "array", "items": { "type": "object" } }
+        "config": { "type": "array", "items": { "type": "object" } },
+        "i18n": {
+          "type": "object",
+          "description": "Translations of the store texts, keyed by language (pt, es, pt-BR).",
+          "propertyNames": { "pattern": "^[a-z]{2}(-[A-Z]{2})?$" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["summary"],
+            "properties": {
+              "summary": { "type": "string", "minLength": 10, "maxLength": 140 },
+              "description": { "type": "string", "maxLength": 4000 }
+            }
+          }
+        }
       }
     },
     "data_type": {
