@@ -1,6 +1,6 @@
-# Posts the review report that Validate wrote for a pull request. Validate runs the pull request's
-# code without any write permission; this workflow has permission to comment but never checks out
-# or runs anything from the pull request. The report is treated as text only.
+# Posts the review report that Validate wrote for a pull request and labels the pull request.
+# Validate runs the pull request's code without any write permission; this workflow can comment
+# but never checks out or runs anything from the pull request. The report is treated as text only.
 name: Review comment
 
 on:
@@ -11,6 +11,7 @@ on:
 permissions:
   actions: read
   contents: read
+  issues: write
   pull-requests: write
 
 jobs:
@@ -26,9 +27,19 @@ jobs:
           path: review
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
-      - name: Post or update the comment
+      # Wingbot's identity when the GitHub App is configured; github-actions[bot] otherwise.
+      - name: Wingbot token
+        id: app
+        if: vars.WINGBOT_APP_ID != ''
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          app-id: ${{ vars.WINGBOT_APP_ID }}
+          private-key: ${{ secrets.WINGBOT_PRIVATE_KEY }}
+          permission-issues: write
+          permission-pull-requests: write
+      - name: Post or update the comment, set the labels
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
           REPO: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
@@ -39,9 +50,16 @@ jobs:
           test "$(gh api "repos/$REPO/pulls/$pr" -q .head.sha)" = "$HEAD_SHA"
           head -c 60000 review/report.md > body.md
           id=$(gh api "repos/$REPO/issues/$pr/comments" --paginate \
-            -q '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- wingbot-review -->"))) | .id' | head -n 1)
+            -q '.[] | select(.user.type == "Bot" and (.body | startswith("<!-- wingbot-review -->"))) | .id' | head -n 1)
           if [ -n "$id" ]; then
             gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@body.md > /dev/null
           else
             gh api -X POST "repos/$REPO/issues/$pr/comments" -F body=@body.md > /dev/null
           fi
+          if grep -q '^Registry checks pass' body.md; then
+            add=ready-for-review; remove=needs-changes
+          else
+            add=needs-changes; remove=ready-for-review
+          fi
+          gh api -X POST "repos/$REPO/issues/$pr/labels" -f "labels[]=$add" > /dev/null
+          gh api -X DELETE "repos/$REPO/issues/$pr/labels/$remove" > /dev/null 2>&1 || true

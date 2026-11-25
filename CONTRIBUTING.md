@@ -62,6 +62,22 @@ The Validate workflow runs on every push to your pull request. A maintainer then
 the report. Reasons for rejection include undeclared network or file access, collecting data the
 adapter does not need for its purpose, obfuscated code, and binaries committed to the repository.
 
+## Wingbot
+
+Wingbot checks every push to your pull request and keeps one comment up to date with the result:
+the registry checks, the version change and the permissions, with new ones in bold. It labels the
+pull request `ready-for-review` when the checks pass and `needs-changes` when they do not.
+
+Maintainers answer with commands in a comment:
+
+| Command | Effect |
+|---|---|
+| `/wingbot recheck` | Runs the checks again for the current commit |
+| `/wingbot publish` | Labels the pull request `approved`, merges it and starts the signed publish |
+| `/wingbot reject <reason>` | Closes the pull request with the reason |
+
+Commands from anyone else get a short explanation and change nothing.
+
 ## Trust levels
 
 | Level | Meaning |
