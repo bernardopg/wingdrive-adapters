@@ -1,0 +1,6 @@
+{
+  "id": "github",
+  "trust": "official",
+  "source": { "type": "local", "path": "adapters/github" },
+  "maintainers": ["bernardopg"]
+}

@@ -128,8 +128,13 @@ def _icon_problems(directory: Path, icon: str) -> list[str]:
     if len(data) > ICON_MAX_BYTES:
         problems.append(f"icon {icon} is {len(data)} bytes; the limit is {ICON_MAX_BYTES}")
     text = data.decode("utf-8", errors="replace")
-    if "<script" in text.lower() or "javascript:" in text.lower():
+    lower = text.lower()
+    if "<script" in lower or "javascript:" in lower or re.search(r"\son[a-z]+\s*=", lower):
         problems.append(f"icon {icon} contains script")
+    if "<foreignobject" in lower or "<!entity" in lower or "<!doctype" in lower:
+        problems.append(f"icon {icon} uses foreignObject or a DTD")
+    if re.search(r"(?:href|src)\s*=\s*[\"'](?!#)", lower) or "url(http" in lower or "@import" in lower:
+        problems.append(f"icon {icon} loads something from outside the file")
     view_box = re.search(r'viewBox="\s*[-\d.]+\s+[-\d.]+\s+([\d.]+)\s+([\d.]+)\s*"', text)
     if not view_box:
         problems.append(f"icon {icon} needs a viewBox")
@@ -328,3 +333,111 @@ def validate(root: Path = ROOT, previous: dict | None = None) -> list[str]:
     with tempfile.TemporaryDirectory() as tmp:
         adapters, problems = collect(root, Path(tmp))
     return problems + version_problems(adapters, previous)
+
+
+# ── Review report ───────────────────────────────────────────────────────────
+
+PERMISSION_KINDS = ("read", "network", "secrets", "tools")
+
+
+def _permission_lines(permissions: dict, before: dict | None) -> list[str]:
+    lines = []
+    for kind in PERMISSION_KINDS:
+        values = permissions.get(kind, [])
+        old = set((before or {}).get(kind, []))
+        if not values and not old:
+            continue
+        shown = [f"**`{v}`** (new)" if before is not None and v not in old else f"`{v}`" for v in values]
+        dropped = [f"~~`{v}`~~" for v in sorted(old - set(values))]
+        lines.append(f"- {kind}: " + (", ".join(shown + dropped) or "none"))
+    return lines or ["- none: no files, network, secrets or programs"]
+
+
+def report(root: Path, previous: dict | None, workdir: Path) -> str:
+    """Markdown for the pull request: what each changed adapter is and may access."""
+    adapters, problems = collect(root, workdir)
+    problems += version_problems(adapters, previous)
+    published = {item["id"]: item for item in (previous or {}).get("adapters", [])}
+    changed = [
+        a for a in adapters
+        if a.id not in published
+        or published[a.id].get("version") != a.meta.get("version")
+        or published[a.id].get("source_entry") != a.entry.get("source")
+    ]
+    out = ["<!-- wingbot-review -->", "## Wingbot review", ""]
+    if problems:
+        out += ["**Fails the registry checks.** Fix these before review:", ""]
+        out += [f"- {p}" for p in problems] + [""]
+    else:
+        out += ["Registry checks pass. A maintainer still reads the code before merging.", ""]
+    if not changed:
+        out.append("No adapter is added or updated by this pull request.")
+    for adapter in changed:
+        meta = adapter.meta
+        before = published.get(adapter.id)
+        version = f"{before['version']} → {meta['version']}" if before else f"{meta['version']} (new)"
+        runtime = meta.get("runtime", {})
+        out += [
+            f"### {meta.get('name', adapter.id)} `{adapter.id}` {version}",
+            "",
+            f"> {meta.get('summary', '')}",
+            "",
+            f"- trust: `{adapter.entry.get('trust')}`, source: `{adapter.entry['source'].get('type')}`"
+            + (f" {adapter.entry['source'].get('repository')}@`{adapter.entry['source'].get('commit', '')[:12]}`"
+               if adapter.entry["source"].get("type") == "git" else ""),
+            f"- runtime: `{runtime.get('kind')}` `{runtime.get('entry')}`, platforms: {', '.join(meta.get('platforms', []))}",
+            "",
+            "**Permissions**" + (" (compared with the published version)" if before else ""),
+            "",
+        ]
+        out += _permission_lines(meta.get("permissions", {}), (before or {}).get("permissions") if before else None)
+        files = sorted(str(p.relative_to(adapter.directory)) for p in adapter.directory.rglob("*")
+                       if p.is_file() and "__pycache__" not in p.parts)
+        out += ["", f"<details><summary>{len(files)} files</summary>", "", *[f"- `{f}`" for f in files], "", "</details>", ""]
+    return "\n".join(out).rstrip() + "\n"
+
+
+# ── Announcements ───────────────────────────────────────────────────────────
+
+TRUST_LABELS = {"official": "Official", "verified": "Verified", "community": "Community"}
+
+
+def announcement(previous: dict | None, current: dict) -> dict | None:
+    """A Discord webhook message for adapters added, updated or revoked since `previous`, or None."""
+    before = {item["id"]: item for item in (previous or {}).get("adapters", [])}
+    embeds = []
+    for item in current.get("adapters", []):
+        old = before.get(item["id"])
+        if old and old.get("version") == item["version"]:
+            continue
+        title = f"{item['name']} {item['version']}" + (" is new in the store" if not old else f" (was {old['version']})")
+        permissions = item.get("permissions", {})
+        access = "; ".join(f"{kind}: {', '.join(permissions[kind])}" for kind in PERMISSION_KINDS if permissions.get(kind))
+        embeds.append({
+            "title": title[:256],
+            "url": item.get("homepage") or REGISTRY_URL,
+            "description": item.get("summary", "")[:400],
+            "color": 0x7C5CFF if not old else 0x3B82F6,
+            "fields": [
+                {"name": "Trust", "value": TRUST_LABELS.get(item.get("trust"), item.get("trust", "")), "inline": True},
+                {"name": "Install", "value": f"`wing adapters install {item['id']}`", "inline": True},
+                {"name": "Access", "value": (access or "none")[:1024], "inline": False},
+            ],
+        })
+    old_revoked = {(r["id"], v) for r in (previous or {}).get("revoked", []) for v in r.get("versions", [])}
+    for revocation in current.get("revoked", []):
+        versions = [v for v in revocation.get("versions", []) if (revocation["id"], v) not in old_revoked]
+        if versions:
+            embeds.append({
+                "title": f"{revocation['id']} {', '.join(versions)} revoked"[:256],
+                "description": revocation.get("reason", "")[:400],
+                "color": 0xEF4444,
+            })
+    if not embeds:
+        return None
+    return {
+        "username": "Wingbot",
+        "content": f"Adapter store index {current.get('sequence')}",
+        "embeds": embeds[:10],
+        "allowed_mentions": {"parse": []},
+    }

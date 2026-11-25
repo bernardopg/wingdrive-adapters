@@ -1,0 +1,89 @@
+[adapter]
+id = "github"
+name = "GitHub"
+summary = "Search your GitHub repositories, stars, issues and pull requests next to your files."
+description = """
+Indexes a GitHub account: the repositories it owns and starred, and with a token the issues and \
+pull requests it opened, was assigned or mentioned in, including private ones the token can see. \
+Each sync asks GitHub only for what changed since the last one, and drops repositories you \
+deleted or unstarred. Read only: it never changes anything on GitHub.\
+"""
+version = "1.0.0"
+author = "WingDrive"
+license = "Apache-2.0"
+homepage = "https://github.com/bernardopg/wingdrive-adapters/tree/main/adapters/github"
+icon = "icon.svg"
+contract = 1
+platforms = ["linux", "macos", "windows"]
+categories = ["code"]
+
+[adapter.runtime]
+kind = "python3"
+entry = "sync.py"
+python = "3.9"
+timeout = 900
+schedule = "0 * * * *"
+detect = true
+
+[adapter.permissions]
+read = ["~/.config/gh/hosts.yml"]
+network = ["api.github.com"]
+secrets = ["token"]
+
+[[adapter.config]]
+key = "username"
+name = "GitHub user"
+description = "Your GitHub user name. Filled in when the GitHub CLI is signed in on this computer."
+type = "string"
+required = true
+
+[[adapter.config]]
+key = "token"
+name = "Access token"
+description = "Optional. A fine-grained token with read access to metadata and issues (or a classic token with the repo scope) adds private repositories, issues and pull requests. Without it only public repositories and stars are indexed."
+type = "string"
+secret = true
+required = false
+
+[[adapter.config]]
+key = "include_starred"
+name = "Starred repositories"
+description = "Index the repositories you starred (true or false)."
+type = "boolean"
+default = true
+required = false
+
+[[adapter.config]]
+key = "include_issues"
+name = "Issues and pull requests"
+description = "With a token, index the issues and pull requests you take part in (true or false)."
+type = "boolean"
+default = true
+required = false
+
+[data_type]
+id = "github"
+name = "GitHub item"
+icon = "code"
+
+[models.item]
+fields.kind = "string"
+fields.title = "string"
+fields.body = "text"
+fields.repo = "string"
+fields.number = "integer"
+fields.state = "string"
+fields.author = "string"
+fields.labels = "string"
+fields.relation = "string"
+fields.url = "string"
+fields.created = "datetime"
+fields.updated = "datetime"
+
+[search]
+primary_model = "item"
+title = "title"
+preview = "body"
+subtitle = "repo"
+search_fields = ["title", "body", "repo", "labels", "author"]
+date_field = "updated"

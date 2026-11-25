@@ -41,7 +41,8 @@
             "entry": { "type": "string", "pattern": "^[A-Za-z0-9_./-]+$" },
             "python": { "type": "string", "pattern": "^3\\.[0-9]+$" },
             "timeout": { "type": "integer", "minimum": 10, "maximum": 3600 },
-            "schedule": { "type": "string", "maxLength": 64 }
+            "schedule": { "type": "string", "maxLength": 64 },
+            "detect": { "type": "boolean" }
           }
         },
         "permissions": {

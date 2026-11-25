@@ -87,6 +87,47 @@ class RegistryTests(unittest.TestCase):
         root = make_registry(self.tmp / "reg", MANIFEST.replace("Indexes a folder", "x" * 200))
         self.assertTrue(any("adapter.summary" in p for p in wingreg.validate(root)))
 
+    def test_icon_with_event_handler_or_external_resource_is_refused(self) -> None:
+        for bad in (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" onload="alert(1)"/>',
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><image href="https://x.test/a.png"/></svg>',
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><foreignObject/></svg>',
+        ):
+            root = make_registry(self.tmp / f"reg{len(bad)}")
+            (root / "adapters" / "sample" / "icon.svg").write_text(bad)
+            self.assertTrue(any("icon" in p for p in wingreg.validate(root)), bad)
+
+    def test_report_marks_new_permissions(self) -> None:
+        root = make_registry(self.tmp / "reg", MANIFEST.replace('version = "1.0.0"', 'version = "1.1.0"').replace(
+            'read = ["~/Notes"]', 'read = ["~/Notes", "~/Mail"]'))
+        previous = {"adapters": [{"id": "sample", "version": "1.0.0", "permissions": {"read": ["~/Notes"]},
+                                  "source_entry": {"type": "local", "path": "adapters/sample"}}]}
+        text = wingreg.report(root, previous, self.tmp / "work")
+        self.assertIn("<!-- wingbot-review -->", text)
+        self.assertIn("Registry checks pass", text)
+        self.assertIn("1.0.0 → 1.1.0", text)
+        self.assertIn("**`~/Mail`** (new)", text)
+        self.assertIn("`~/Notes`,", text)
+
+    def test_announcement_covers_new_updated_and_revoked(self) -> None:
+        def item(version, read):
+            return {"id": "sample", "name": "Sample", "version": version, "summary": "S", "trust": "official",
+                    "permissions": {"read": read}}
+        previous = {"sequence": 4, "adapters": [item("1.0.0", ["~/Notes"])], "revoked": []}
+        same = {"sequence": 5, "adapters": [item("1.0.0", ["~/Notes"])], "revoked": []}
+        self.assertIsNone(wingreg.announcement(previous, same))
+        current = {"sequence": 6, "adapters": [item("1.1.0", ["~/Notes"]), dict(item("0.1.0", []), id="other", name="Other")],
+                   "revoked": [{"id": "sample", "versions": ["1.0.0"], "reason": "leaks data"}]}
+        message = wingreg.announcement(previous, current)
+        titles = [embed["title"] for embed in message["embeds"]]
+        self.assertEqual(titles, ["Sample 1.1.0 (was 1.0.0)", "Other 0.1.0 is new in the store", "sample 1.0.0 revoked"])
+        self.assertEqual(message["allowed_mentions"], {"parse": []})
+        self.assertIn("none", message["embeds"][1]["fields"][2]["value"])
+
+    def test_report_lists_problems(self) -> None:
+        root = make_registry(self.tmp / "reg", MANIFEST.replace('version = "1.0.0"', 'version = "one"'))
+        self.assertIn("Fails the registry checks", wingreg.report(root, None, self.tmp / "work"))
+
     def test_search_must_name_fields_of_the_primary_model(self) -> None:
         root = make_registry(self.tmp / "reg", MANIFEST.replace('preview = "body"', 'preview = "summary"'))
         problems = wingreg.validate(root)

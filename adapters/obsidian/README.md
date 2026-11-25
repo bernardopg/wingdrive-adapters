@@ -8,7 +8,8 @@ files, not only Obsidian vaults.
 
 1. In WingDrive, open **Sources > Add source > Adapters** and install **Obsidian**, or run
    `wing adapters install obsidian`.
-2. Add a source and choose your vault folder (the folder that holds `.obsidian/`).
+2. Add a source. The vault you opened last in Obsidian is filled in, and the others are offered;
+   any folder of Markdown files works too.
 3. Optionally list folders or files to skip, separated by commas: `Templates, Archive/*, *.excalidraw.md`.
 
 The adapter needs Python 3.9 or later (`python3` on Linux and macOS, `python` on Windows). It uses
@@ -42,5 +43,6 @@ note was created after them.
 
 ## Privacy
 
-The adapter reads only the vault folder you choose. It does not use the network, run other
+The adapter reads only the vault folder you choose, plus Obsidian's own list of vaults
+(`obsidian.json`) to suggest one. It does not use the network, run other
 programs, or write anywhere. Your notes stay in your WingDrive library on this computer.
