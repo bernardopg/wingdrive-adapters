@@ -98,7 +98,8 @@ class FirstSync(VaultTest):
         self.assertEqual(note["tags"], "home/outdoor, plants, tomatoes")
         self.assertEqual(note["aliases"], "Backyard, Quintal")
         self.assertEqual(note["created"], "2025-03-01T10:30:00+00:00")
-        self.assertTrue(note["body"].startswith("# Garden"))
+        # The heading only repeats the title, so the body starts with the text.
+        self.assertTrue(note["body"].startswith("Water the #tomatoes"), note["body"])
         self.assertNotIn("tags:", note["body"])
 
     def test_non_ascii_names_and_text(self):
@@ -110,6 +111,10 @@ class FirstSync(VaultTest):
         self.assertEqual(note["tags"], "ação, não_é")
         nid = ids(run_.cursor)
         self.assertEqual(run_.links, {(nid["Café/Ação ✓.md"], nid["Café/Outra.md"])})
+
+    def test_a_heading_different_from_the_title_stays(self):
+        self.write("Plan.md", "# Something else\nText\n")
+        self.assertTrue(self.sync().by_path("Plan.md")["body"].startswith("# Something else"))
 
     def test_title_from_frontmatter_and_single_alias(self):
         self.write("a.md", "---\ntitle: Real title\naliases: My Alias\ntags: one two\n---\nbody\n")

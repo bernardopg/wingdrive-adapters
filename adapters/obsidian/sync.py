@@ -205,7 +205,7 @@ def read_note(full_path, rel_path, stat):
     title = frontmatter.get("title") if isinstance(frontmatter.get("title"), str) else None
     folder = os.path.dirname(rel_path)
 
-    body = body.strip()
+    body = drop_title_heading(body.strip(), title or stem)
     fields = {
         "title": title or stem,
         "body": body if len(body) <= MAX_BODY else body[:MAX_BODY],
@@ -218,6 +218,14 @@ def read_note(full_path, rel_path, stat):
         "word_count": len(re.findall(r"\w+", visible)),
     }
     return fields, link_targets(visible, folder), aliases
+
+
+def drop_title_heading(body, title):
+    """Drops a first `# Heading` that only repeats the note's title, so previews start with text."""
+    first, _, rest = body.partition("\n")
+    if first.startswith("# ") and first[2:].strip().lower() == title.strip().lower():
+        return rest.lstrip("\n")
+    return body
 
 
 # ── Vault ───────────────────────────────────────────────────────────────────
