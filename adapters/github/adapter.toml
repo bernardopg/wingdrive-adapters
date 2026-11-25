@@ -8,7 +8,7 @@ pull requests it opened, was assigned or mentioned in, including private ones th
 Each sync asks GitHub only for what changed since the last one, and drops repositories you \
 deleted or unstarred. Read only: it never changes anything on GitHub.\
 """
-version = "1.0.0"
+version = "1.0.1"
 author = "WingDrive"
 license = "Apache-2.0"
 homepage = "https://github.com/bernardopg/wingdrive-adapters/tree/main/adapters/github"
