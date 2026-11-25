@@ -27,7 +27,8 @@ in the app repository.
 
 1. A pull request adds or updates `registry/<id>.json` (and, for official adapters, `adapters/<id>/`).
 2. The **Validate** workflow checks the entry, the `adapter.toml`, the icon, the README and the
-   version, without any secret. Wingbot reports the result on the pull request.
+   version, without any secret. [Wingbot](https://github.com/apps/wingdrive-wingbot) comments the
+   result on the pull request and labels it `ready-for-review` or `needs-changes`.
 3. A maintainer reviews the code and the report, then merges.
 4. The **Publish** workflow builds a reproducible archive for each adapter, writes `index.json`,
    signs it with the registry key after the maintainer approves the `registry-publish`
