@@ -22,7 +22,7 @@ One record per Markdown note:
 | Field | From |
 |---|---|
 | `title` | `title` in the frontmatter, or the file name |
-| `body` | The note without its frontmatter (first 200,000 characters) |
+| `body` | The note without its frontmatter and without a first heading that repeats the title (first 200,000 characters) |
 | `path`, `folder` | The path inside the vault |
 | `tags` | Frontmatter `tags` and inline `#tags`, outside code blocks |
 | `aliases` | Frontmatter `aliases` |

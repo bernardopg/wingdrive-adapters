@@ -23,7 +23,7 @@ Um registro por nota Markdown:
 | Campo | Origem |
 |---|---|
 | `title` | `title` no frontmatter, ou o nome do arquivo |
-| `body` | A nota sem o frontmatter (primeiros 200.000 caracteres) |
+| `body` | A nota sem o frontmatter e sem um primeiro título que só repete o nome da nota (primeiros 200.000 caracteres) |
 | `path`, `folder` | O caminho dentro do cofre |
 | `tags` | `tags` do frontmatter e `#tags` no texto, fora de blocos de código |
 | `aliases` | `aliases` do frontmatter |
