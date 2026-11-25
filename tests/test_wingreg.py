@@ -122,6 +122,8 @@ class RegistryTests(unittest.TestCase):
         titles = [embed["title"] for embed in message["embeds"]]
         self.assertEqual(titles, ["Sample 1.1.0 (was 1.0.0)", "Other 0.1.0 is new in the store", "sample 1.0.0 revoked"])
         self.assertEqual(message["allowed_mentions"], {"parse": []})
+        self.assertTrue(message["avatar_url"].endswith("/assets/wingbot.png"))
+        self.assertIn("leaks data", message["embeds"][2]["description"])
         self.assertIn("none", message["embeds"][1]["fields"][2]["value"])
 
     def test_report_lists_problems(self) -> None:

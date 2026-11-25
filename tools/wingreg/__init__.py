@@ -440,6 +440,7 @@ def report(root: Path, previous: dict | None, workdir: Path) -> str:
 
 # ── Announcements ───────────────────────────────────────────────────────────
 
+WINGBOT_AVATAR = "https://raw.githubusercontent.com/bernardopg/wingdrive-adapters/main/assets/wingbot.png"
 TRUST_LABELS = {"official": "Official", "verified": "Verified", "community": "Community"}
 
 
@@ -455,31 +456,38 @@ def announcement(previous: dict | None, current: dict) -> dict | None:
         permissions = item.get("permissions", {})
         access = "; ".join(f"{kind}: {', '.join(permissions[kind])}" for kind in PERMISSION_KINDS if permissions.get(kind))
         png = (item.get("icon") or {}).get("png")
-        embeds.append({
+        embed = {
             **({"thumbnail": {"url": png["url"]}} if png else {}),
             "title": title[:256],
             "url": item.get("homepage") or REGISTRY_URL,
             "description": item.get("summary", "")[:400],
             "color": 0x7C5CFF if not old else 0x3B82F6,
+            "author": {"name": item.get("author", "")} if item.get("author") else None,
+            "footer": {"text": f"Signed index {current.get('sequence')} · wingdrive.org/adapters"},
             "fields": [
                 {"name": "Trust", "value": TRUST_LABELS.get(item.get("trust"), item.get("trust", "")), "inline": True},
                 {"name": "Install", "value": f"`wing adapters install {item['id']}`", "inline": True},
-                {"name": "Access", "value": (access or "none")[:1024], "inline": False},
+                {"name": "Access", "value": (access or "none: works offline")[:1024], "inline": False},
             ],
-        })
+        }
+        embeds.append({key: value for key, value in embed.items() if value is not None})
     old_revoked = {(r["id"], v) for r in (previous or {}).get("revoked", []) for v in r.get("versions", [])}
     for revocation in current.get("revoked", []):
         versions = [v for v in revocation.get("versions", []) if (revocation["id"], v) not in old_revoked]
         if versions:
             embeds.append({
                 "title": f"{revocation['id']} {', '.join(versions)} revoked"[:256],
-                "description": revocation.get("reason", "")[:400],
+                "description": (
+                    "WingDrive disables this version on every install. Reason: " + revocation.get("reason", "")
+                )[:400],
                 "color": 0xEF4444,
+                "footer": {"text": f"Signed index {current.get('sequence')}"},
             })
     if not embeds:
         return None
     return {
         "username": "Wingbot",
+        "avatar_url": WINGBOT_AVATAR,
         "content": f"Adapter store index {current.get('sequence')}",
         "embeds": embeds[:10],
         "allowed_mentions": {"parse": []},
