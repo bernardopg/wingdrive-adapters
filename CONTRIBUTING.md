@@ -5,7 +5,12 @@
 - Your adapter lives in a public GitHub repository with a license, a README and tests.
 - `adapter.toml` declares contract 1 and every permission the adapter uses: paths it reads,
   network hosts it contacts, secrets it needs and tools it runs. Undeclared access fails review and
-  is blocked at run time.
+  is blocked at run time. A `read` path can name a config field, `"{config.vault_path}"`, when
+  the adapter reads the folder the user picks there.
+- `adapter.toml` speaks the contract in
+  [`docs/core/adapters.mdx`](https://github.com/bernardopg/wingdrive/blob/main/docs/core/adapters.mdx):
+  config and cursor on stdin, JSON lines on stdout, deletions printed by the adapter.
+- `[search]` names the primary model and fields of it for `title`, `preview` and `search_fields`.
 - `README.md` has `## Setup`, `## Data` and `## Privacy` sections.
 - The icon is a square SVG under 64 KB, without scripts.
 - The summary fits in two lines (140 characters).

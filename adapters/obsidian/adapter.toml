@@ -1,0 +1,70 @@
+[adapter]
+id = "obsidian"
+name = "Obsidian"
+summary = "Search your Obsidian vault: notes with their tags, aliases and the links between them."
+description = """
+Reads every Markdown note in an Obsidian vault, or any folder of Markdown files. Each note keeps \
+its frontmatter tags and aliases, inline #tags, folder, dates and word count, and links to the \
+notes it points at through [[wikilinks]] or Markdown links. Syncs read only the notes that \
+changed and remove the ones you deleted. Nothing leaves your computer.\
+"""
+version = "1.0.0"
+author = "WingDrive"
+license = "Apache-2.0"
+homepage = "https://github.com/bernardopg/wingdrive-adapters/tree/main/adapters/obsidian"
+icon = "icon.svg"
+contract = 1
+platforms = ["linux", "macos", "windows"]
+categories = ["notes"]
+
+[adapter.runtime]
+kind = "python3"
+entry = "sync.py"
+python = "3.9"
+timeout = 600
+schedule = "*/15 * * * *"
+
+[adapter.permissions]
+read = ["{config.vault_path}"]
+
+[[adapter.config]]
+key = "vault_path"
+name = "Vault"
+description = "The folder of your Obsidian vault, or any folder of Markdown notes."
+type = "string"
+path_type = "folder"
+required = true
+
+[[adapter.config]]
+key = "exclude_patterns"
+name = "Skip"
+description = "Folders or files to leave out, separated by commas (for example: Templates, Archive/*, *.excalidraw.md)."
+type = "string"
+required = false
+
+[data_type]
+id = "obsidian"
+name = "Obsidian note"
+icon = "note"
+
+[models.note]
+fields.title = "string"
+fields.body = "text"
+fields.path = "string"
+fields.folder = "string"
+fields.tags = "string"
+fields.aliases = "string"
+fields.created = "datetime"
+fields.modified = "datetime"
+fields.word_count = "integer"
+
+[models.note.relations]
+many_to_many = ["note"]
+
+[search]
+primary_model = "note"
+title = "title"
+preview = "body"
+subtitle = "path"
+search_fields = ["title", "body", "tags", "aliases"]
+date_field = "modified"

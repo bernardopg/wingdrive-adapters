@@ -1,0 +1,6 @@
+{
+  "id": "obsidian",
+  "trust": "official",
+  "source": { "type": "local", "path": "adapters/obsidian" },
+  "maintainers": ["bernardopg"]
+}

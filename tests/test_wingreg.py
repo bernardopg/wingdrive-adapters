@@ -33,6 +33,20 @@ entry = "sync.py"
 
 [adapter.permissions]
 read = ["~/Notes"]
+
+[data_type]
+id = "sample"
+name = "Sample note"
+
+[models.note]
+fields.title = "string"
+fields.body = "text"
+
+[search]
+primary_model = "note"
+title = "title"
+preview = "body"
+search_fields = ["title", "body"]
 """
 
 README = "# Sample\n\n## Setup\n\nPick a folder.\n\n## Data\n\nNotes.\n\n## Privacy\n\nLocal only.\n"
@@ -72,6 +86,11 @@ class RegistryTests(unittest.TestCase):
     def test_summary_longer_than_two_lines_fails(self) -> None:
         root = make_registry(self.tmp / "reg", MANIFEST.replace("Indexes a folder", "x" * 200))
         self.assertTrue(any("adapter.summary" in p for p in wingreg.validate(root)))
+
+    def test_search_must_name_fields_of_the_primary_model(self) -> None:
+        root = make_registry(self.tmp / "reg", MANIFEST.replace('preview = "body"', 'preview = "summary"'))
+        problems = wingreg.validate(root)
+        self.assertTrue(any("search.preview" in p and "summary" in p for p in problems), problems)
 
     def test_file_name_must_match_id(self) -> None:
         root = make_registry(self.tmp / "reg")
