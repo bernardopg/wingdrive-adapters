@@ -185,6 +185,28 @@ class RegistryTests(unittest.TestCase):
         previous["adapters"][0]["version"] = "2.0.0"
         self.assertTrue(any("lower than the published" in p for p in wingreg.validate(root, previous)))
 
+    def test_changed_files_of_a_local_adapter_need_a_version_bump(self) -> None:
+        root = make_registry(self.tmp / "reg")
+        archive = wingreg.pack(root / "adapters/sample", "sample")
+        entry = {"type": "local", "path": "adapters/sample"}
+        same = {"adapters": [{"id": "sample", "version": "1.0.0", "source_entry": entry,
+                              "artifacts": [{"target": "any", "sha256": wingreg.sha256(archive)}]}]}
+        self.assertEqual(wingreg.validate(root, same), [])
+        (root / "adapters/sample/sync.py").write_text("print('changed')\n")
+        self.assertTrue(any("must increase" in p for p in wingreg.validate(root, same)))
+
+    def test_index_has_png_icons_and_translations(self) -> None:
+        manifest = MANIFEST.replace("[adapter.runtime]", '[adapter.i18n.pt]\nsummary = "Indexa uma pasta de notas de exemplo para os testes."\n\n[adapter.runtime]')
+        root = make_registry(self.tmp / "reg", manifest)
+        out = self.tmp / "dist"
+        [item] = wingreg.build_index(root, out, 8, "https://example.test/index-8/", self.tmp / "work")["adapters"]
+        png = (out / "sample-1.0.0.png").read_bytes()
+        self.assertTrue(png.startswith(b"\x89PNG"))
+        self.assertEqual(item["icon"]["png"]["sha256"], wingreg.sha256(png))
+        self.assertEqual(item["i18n"]["pt"]["summary"], "Indexa uma pasta de notas de exemplo para os testes.")
+        message = wingreg.announcement(None, {"sequence": 8, "adapters": [item], "revoked": []})
+        self.assertEqual(message["embeds"][0]["thumbnail"]["url"], "https://example.test/index-8/sample-1.0.0.png")
+
     def test_compiled_adapters_wait_for_the_build_workflow(self) -> None:
         manifest = MANIFEST.replace('kind = "python3"\nentry = "sync.py"', 'kind = "binary"\nentry = "bin/sample"')
         root = make_registry(self.tmp / "reg", manifest)

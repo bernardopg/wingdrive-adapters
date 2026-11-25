@@ -27,6 +27,8 @@ jobs:
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           enable-cache: false # nothing to cache: the tools use only jsonschema
+      - name: Install rsvg-convert
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq librsvg2-bin
       - name: Tooling tests
         run: uv run --python 3.12 --with jsonschema python -m unittest discover -s tests
       - name: Last published index

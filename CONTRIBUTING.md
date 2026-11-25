@@ -14,6 +14,14 @@
 - `README.md` has `## Setup`, `## Data` and `## Privacy` sections.
 - The icon is a square SVG under 64 KB, without scripts.
 - The summary fits in two lines (140 characters).
+- Optionally translate the store texts. The app and wingdrive.org show them to users of that
+  language:
+
+  ```toml
+  [adapter.i18n.pt]
+  summary = "Até 140 caracteres."
+  description = "Texto longo da página de detalhes."
+  ```
 - You tagged the commit you want published.
 
 ## The entry
@@ -39,7 +47,8 @@ commit. The tag must keep pointing at that commit.
 
 ## Updates
 
-Open a pull request that moves `tag` and `commit` and raise `version` in `adapter.toml`. The
+Open a pull request that moves `tag` and `commit` and raise `version` in `adapter.toml`. Any change to
+the files of a published version needs a new version, even for official adapters kept here. The
 review shows the diff since the last published commit. An update that asks for new permissions
 makes the app ask every user again before installing it.
 
