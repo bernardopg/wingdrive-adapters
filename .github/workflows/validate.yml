@@ -39,6 +39,22 @@ jobs:
         run: |
           cd tools
           uv run --python 3.12 --with jsonschema python -m wingreg validate --previous ../previous/index.json
+      - name: Review report
+        if: always() && github.event_name == 'pull_request'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          mkdir -p review
+          cd tools
+          uv run --python 3.12 --with jsonschema python -m wingreg report --previous ../previous/index.json --out ../review/report.md
+          echo "$PR_NUMBER" > ../review/pr.txt
+      - name: Keep the report for the comment workflow
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wingbot-review
+          path: review/
+          retention-days: 7
 
   adapter-tests:
     name: Official adapter tests (${{ matrix.os }}, Python ${{ matrix.python }})

@@ -62,6 +62,12 @@ jobs:
           printf '%s\n' "$MINISIGN_SECRET_KEY" > "$key"
           minisign -S -s "$key" -m dist/index.json -t "wingdrive-adapters index $SEQUENCE"
           minisign -V -p keys/active.pub -m dist/index.json
+      - name: Previous index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern index.json --dir previous 2>/dev/null \
+            || echo "No published index yet"
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -72,3 +78,19 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest \
             --title "Index $SEQUENCE" \
             --notes "Signed adapter index $SEQUENCE with $count adapter(s). Verify with \`minisign -V -p keys/active.pub -m index.json\`."
+      - name: Announce on Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_ADAPTERS_WEBHOOK }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "No Discord webhook configured"
+            exit 0
+          fi
+          cd tools
+          uv run --python 3.12 --with jsonschema python -m wingreg announce \
+            --previous ../previous/index.json --current ../dist/index.json > ../announcement.json
+          if [ -s ../announcement.json ]; then
+            curl -fsS -X POST -H "Content-Type: application/json" --data @../announcement.json "$WEBHOOK"
+          else
+            echo "Nothing to announce"
+          fi

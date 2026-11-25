@@ -8,7 +8,7 @@ its frontmatter tags and aliases, inline #tags, folder, dates and word count, an
 notes it points at through [[wikilinks]] or Markdown links. Syncs read only the notes that \
 changed and remove the ones you deleted. Nothing leaves your computer.\
 """
-version = "1.0.0"
+version = "1.1.0"
 author = "WingDrive"
 license = "Apache-2.0"
 homepage = "https://github.com/bernardopg/wingdrive-adapters/tree/main/adapters/obsidian"
@@ -23,14 +23,15 @@ entry = "sync.py"
 python = "3.9"
 timeout = 600
 schedule = "*/15 * * * *"
+detect = true
 
 [adapter.permissions]
-read = ["{config.vault_path}"]
+read = ["{config.vault_path}", "~/.config/obsidian/obsidian.json"]
 
 [[adapter.config]]
 key = "vault_path"
 name = "Vault"
-description = "The folder of your Obsidian vault, or any folder of Markdown notes."
+description = "The folder of your Obsidian vault, or any folder of Markdown notes. The vaults Obsidian knows are offered."
 type = "string"
 path_type = "folder"
 required = true

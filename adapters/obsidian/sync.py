@@ -366,6 +366,43 @@ def sync(payload):
     )
 
 
+# ── Detect ──────────────────────────────────────────────────────────────────
+
+
+def obsidian_configs():
+    """Where Obsidian keeps its list of vaults on each system and install type."""
+    home = os.path.expanduser("~")
+    paths = [
+        os.path.join(home, ".config", "obsidian", "obsidian.json"),
+        os.path.join(home, ".var", "app", "md.obsidian.Obsidian", "config", "obsidian", "obsidian.json"),
+        os.path.join(home, "snap", "obsidian", "current", ".config", "obsidian", "obsidian.json"),
+        os.path.join(home, "Library", "Application Support", "obsidian", "obsidian.json"),
+    ]
+    if os.environ.get("APPDATA"):
+        paths.append(os.path.join(os.environ["APPDATA"], "obsidian", "obsidian.json"))
+    return paths
+
+
+def detect():
+    """Suggest the vaults Obsidian knows, most recently opened first."""
+    vaults = []
+    for path in obsidian_configs():
+        try:
+            with open(path, encoding="utf-8") as handle:
+                known = json.load(handle).get("vaults") or {}
+        except (OSError, ValueError, AttributeError):
+            continue
+        for vault in known.values():
+            if isinstance(vault, dict) and isinstance(vault.get("path"), str):
+                vaults.append((vault.get("ts") or 0, vault["path"]))
+    paths = []
+    for _, path in sorted(vaults, key=lambda v: v[0] if isinstance(v[0], (int, float)) else 0, reverse=True):
+        if os.path.isdir(path) and path not in paths:
+            paths.append(path)
+    if paths:
+        emit({"suggest": {"vault_path": paths}})
+
+
 def main():
     # The daemon speaks UTF-8 on every platform; Windows consoles default to a code page.
     sys.stdin.reconfigure(encoding="utf-8")
@@ -374,6 +411,9 @@ def main():
         payload = json.load(sys.stdin)
         if not isinstance(payload, dict) or payload.get("contract") != 1:
             raise InputError("expected a contract 1 input document on stdin")
+        if payload.get("mode") == "detect":
+            detect()
+            return 0
         sync(payload)
     except InputError as error:
         print(error, file=sys.stderr)
