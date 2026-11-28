@@ -1,0 +1,10 @@
+{
+  "counts": {"note": 2},
+  "records": [
+    {"model": "note", "external_id": "ee56aedfd51ba487",
+     "fields": {"title": "Trip", "path": "Trip.md", "tags": "plan, trip", "aliases": "Holiday", "word_count": 9}},
+    {"model": "note", "external_id": "b1752aee72a6f731",
+     "fields": {"title": "Budget", "path": "Projects/Budget.md", "folder": "Projects", "tags": "money"}}
+  ],
+  "absent": [{"model": "note", "external_id": "4e342269435aa1f8"}]
+}

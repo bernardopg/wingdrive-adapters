@@ -392,7 +392,7 @@ def obsidian_configs():
 
 
 def detect():
-    """Suggest the vaults Obsidian knows, most recently opened first."""
+    """Suggest the vaults Obsidian knows that still have their .obsidian folder, most recent first."""
     vaults = []
     for path in obsidian_configs():
         try:
@@ -408,7 +408,9 @@ def detect():
     confined = os.environ.get("WINGDRIVE_ADAPTER_ISOLATION") == "bubblewrap"
     paths = []
     for _, path in sorted(vaults, key=lambda v: v[0] if isinstance(v[0], (int, float)) else 0, reverse=True):
-        if path not in paths and (confined or os.path.isdir(path)):
+        # A vault is a folder with an .obsidian settings folder; one Obsidian still lists after the
+        # folder was moved or deleted is not offered.
+        if path not in paths and (confined or os.path.isdir(os.path.join(path, ".obsidian"))):
             paths.append(path)
     if paths:
         emit({"suggest": {"vault_path": paths}})
