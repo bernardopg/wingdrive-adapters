@@ -78,7 +78,7 @@ jobs:
         shell: bash
         run: |
           status=0
-          for tests in adapters/*/tests; do
+          for tests in kit/*/tests templates/*/tests adapters/*/tests; do
             [ -d "$tests" ] || continue
             echo "::group::${tests%/tests}"
             uv run --no-project --python "${{ matrix.python }}" python -m unittest discover -s "$tests" -t "$tests" || status=1
