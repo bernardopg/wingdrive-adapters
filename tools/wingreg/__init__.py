@@ -28,6 +28,10 @@ ICON_MAX_BYTES = 64 * 1024
 EXCLUDED = {"__pycache__", ".git", ".github", ".pytest_cache", "target", "node_modules"}
 REQUIRED_README_SECTIONS = ("## Setup", "## Data", "## Privacy")
 # Translated READMEs (README.<lang>.md) keep the same three sections, in their language.
+# The Python adapter kit. Adapters vendor `wingdrive_adapter.py`; each copy must be a released kit,
+# so a reviewer reads its code once, not once per adapter.
+KIT_FILE = "wingdrive_adapter.py"
+KIT_RELEASES = ROOT / "kit" / "python" / "releases.json"
 TRANSLATED_README_SECTIONS = {
     "pt": ("## Configuração", "## Dados", "## Privacidade"),
     "es": ("## Configuración", "## Datos", "## Privacidad"),
@@ -148,6 +152,21 @@ def _icon_problems(directory: Path, icon: str) -> list[str]:
     return problems
 
 
+def kit_problems(directory: Path, releases: Path = KIT_RELEASES) -> list[str]:
+    """Every vendored copy of the adapter kit must match a release listed in kit/python/releases.json."""
+    known = {digest: version for version, digest in json.loads(releases.read_text()).items()}
+    problems = []
+    for path in sorted(directory.rglob(KIT_FILE)):
+        relative = path.relative_to(directory)
+        if any(part in EXCLUDED for part in relative.parts):
+            continue
+        if hashlib.sha256(path.read_bytes()).hexdigest() not in known:
+            problems.append(
+                f"{relative} is not a released adapter kit; copy it unchanged from kit/python in {REGISTRY_URL}"
+            )
+    return problems
+
+
 def load_adapter(entry: dict, directory: Path) -> Adapter:
     """Reads and checks the manifest, icon, entry point and README of one adapter."""
     manifest_path = directory / "adapter.toml"
@@ -193,6 +212,7 @@ def load_adapter(entry: dict, directory: Path) -> Adapter:
     if not any((directory / name).is_file() for name in ("LICENSE", "LICENSE.md", "LICENSE.txt")) and entry["source"]["type"] == "git":
         adapter.problems.append(f"{entry['id']}: LICENSE file is missing")
     adapter.problems += _search_problems(entry["id"], manifest)
+    adapter.problems += [f"{entry['id']}: {p}" for p in kit_problems(directory)]
     if not (directory / "tests").is_dir():
         adapter.problems.append(f"{entry['id']}: tests/ is missing")
     return adapter

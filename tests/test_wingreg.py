@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -10,7 +12,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
 
 import wingreg  # noqa: E402
 
@@ -151,6 +154,24 @@ class RegistryTests(unittest.TestCase):
         problems = wingreg.validate(root)
         self.assertTrue(any("must be square" in p for p in problems), problems)
         self.assertTrue(any("contains script" in p for p in problems), problems)
+
+    def test_vendored_adapter_kit_must_be_a_release(self) -> None:
+        kit = ROOT / "kit" / "python" / "wingdrive_adapter.py"
+        root = make_registry(self.tmp / "reg")
+        shutil.copy(kit, root / "adapters/sample/wingdrive_adapter.py")
+        self.assertEqual(wingreg.validate(root), [])
+        (root / "adapters/sample/wingdrive_adapter.py").write_text(kit.read_text() + "# changed\n")
+        problems = wingreg.validate(root)
+        self.assertTrue(any("wingdrive_adapter.py is not a released adapter kit" in p for p in problems), problems)
+
+    def test_kit_and_template_copies_are_released(self) -> None:
+        kit = ROOT / "kit" / "python" / "wingdrive_adapter.py"
+        version = re.search(r'^KIT_VERSION = "([^"]+)"', kit.read_text(), re.MULTILINE).group(1)
+        releases = json.loads((ROOT / "kit" / "python" / "releases.json").read_text())
+        self.assertEqual(releases.get(version), hashlib.sha256(kit.read_bytes()).hexdigest(),
+                         "a changed kit needs a new KIT_VERSION and its sha256 in releases.json")
+        for template in sorted((ROOT / "templates").glob("*/" + wingreg.KIT_FILE)):
+            self.assertEqual(template.read_bytes(), kit.read_bytes(), f"{template} is not the current kit")
 
     def test_readme_sections_are_required(self) -> None:
         root = make_registry(self.tmp / "reg")

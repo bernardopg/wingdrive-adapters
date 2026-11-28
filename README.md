@@ -12,7 +12,8 @@ This repository holds:
 |---|---|
 | `registry/` | One entry per published adapter: where it comes from and how far it is trusted |
 | `adapters/` | Official adapters, kept here and reviewed like any other |
-| `templates/` | Starting points for new adapters (Python and Rust) |
+| `templates/` | Starting points for new adapters (Python now, Rust later) |
+| `kit/` | The adapter kit that adapters copy into their folder (`kit/python/wingdrive_adapter.py`) |
 | `drafts/` | Unfinished adapters; never published |
 | `schema/` | JSON Schemas for entries, `adapter.toml` and the index |
 | `keys/` | Public keys that sign the index, and the rotation log |

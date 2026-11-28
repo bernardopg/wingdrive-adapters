@@ -1,0 +1,65 @@
+# Template adapter: one note per .txt file in a folder. Copy this folder, then change the id, the
+# texts, the config and the models. Every field is described in docs/core/adapters.mdx in the
+# WingDrive repository.
+[adapter]
+id = "text-notes"
+name = "Text notes"
+summary = "Search the .txt files of a folder, one note per file."
+description = """
+Reads every .txt file at the top of a folder and keeps its name, text and word count. Syncs read \
+only the files that changed and remove the notes of files you deleted. Nothing leaves your \
+computer.\
+"""
+version = "0.1.0"
+author = "Your name"
+license = "Apache-2.0"
+homepage = "https://github.com/you/wingdrive-adapter-text-notes"
+icon = "icon.svg"
+contract = 1
+platforms = ["linux", "macos", "windows"]
+categories = ["notes"]
+
+[adapter.i18n.pt]
+summary = "Busque nos arquivos .txt de uma pasta, uma nota por arquivo."
+description = """
+Lê cada arquivo .txt no topo de uma pasta e guarda o nome, o texto e a contagem de palavras. As sincronizações leem só os arquivos que mudaram e removem as notas dos arquivos que você apagou. Nada sai do seu computador.
+"""
+
+[adapter.i18n.pt.config.folder]
+name = "Pasta"
+description = "A pasta com os arquivos .txt."
+
+[adapter.runtime]
+kind = "python3"
+entry = "sync.py"
+python = "3.9"
+timeout = 300
+schedule = "*/30 * * * *"
+
+[adapter.permissions]
+# The sandbox shows the adapter only these paths. `{config.folder}` is the folder the user picks.
+read = ["{config.folder}"]
+
+[[adapter.config]]
+key = "folder"
+name = "Folder"
+description = "The folder that holds your .txt files."
+type = "string"
+path_type = "folder"
+required = true
+
+[data_type]
+id = "note"
+name = "Note"
+
+[models.note]
+fields.title = "string"
+fields.body = "text"
+fields.words = "integer"
+fields.modified = "datetime"
+
+[search]
+primary_model = "note"
+title = "title"
+preview = "body"
+search_fields = ["title", "body"]

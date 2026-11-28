@@ -28,6 +28,12 @@
   `## Privacidade`) is shown on that language's page of wingdrive.org.
 - You tagged the commit you want published.
 
+## Start from the template
+
+`templates/python/` is a complete adapter built on the adapter kit (`kit/python/`). Copy it, then
+check your adapter the way the daemon runs it, with `wing adapter test .` in its folder. A vendored
+`wingdrive_adapter.py` must be an unchanged kit release.
+
 ## The entry
 
 Add `registry/<id>.json`:
