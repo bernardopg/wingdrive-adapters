@@ -64,6 +64,8 @@ def make_registry(root: Path, manifest: str = MANIFEST, entry: dict | None = Non
     (adapter / "README.md").write_text(README)
     (adapter / "icon.svg").write_text(ICON)
     (adapter / "tests" / "test_sample.py").write_text("")
+    (adapter / "fixtures" / "empty").mkdir(parents=True)
+    (adapter / "fixtures" / "empty" / "expected.json").write_text('{"counts": {"note": 0}}')
     (root / "registry").mkdir()
     entry = entry or {"id": "sample", "trust": "official", "source": {"type": "local", "path": "adapters/sample"}}
     (root / "registry" / "sample.json").write_text(json.dumps(entry))
@@ -236,6 +238,26 @@ class RegistryTests(unittest.TestCase):
         self.assertTrue(any("README.pt.md needs a '## Privacidade'" in p for p in wingreg.validate(root)))
         (root / "adapters/sample/README.pt.md").write_text("# Exemplo\n\n## Configuração\n\n## Dados\n\n## Privacidade\n")
         self.assertEqual(wingreg.validate(root), [])
+
+    def test_harness_cases_are_required(self) -> None:
+        root = make_registry(self.tmp / "reg")
+        shutil.rmtree(root / "adapters/sample/fixtures")
+        self.assertTrue(any("fixtures/ has no case" in p for p in wingreg.validate(root)))
+
+    def test_report_shows_checks_and_the_diff_since_the_last_pin(self) -> None:
+        old, new = "1" * 40, "2" * 40
+        source = {"type": "git", "repository": "https://github.com/someone/sample", "tag": "v1.1.0", "commit": new}
+        adapter = wingreg.Adapter(
+            entry={"id": "sample", "trust": "community", "source": source},
+            manifest={"adapter": {"name": "Sample", "version": "1.1.0", "summary": "s", "runtime": {}}},
+            directory=self.tmp,
+        )
+        previous = {"adapters": [{"id": "sample", "version": "1.0.0", "source_entry": {**source, "commit": old}}]}
+        results = {"sample": [wingreg.checks.CheckResult("Structure", True), wingreg.checks.CheckResult("Contract harness", False, "FAIL basic")]}
+        text = wingreg.render_report([adapter], ["sample: contract harness failed"], results, previous)
+        self.assertIn(f"https://github.com/someone/sample/compare/{old}...{new}", text)
+        self.assertIn("| Contract harness | **fail** |", text)
+        self.assertIn("FAIL basic", text)
 
     def test_compiled_adapters_wait_for_the_build_workflow(self) -> None:
         manifest = MANIFEST.replace('kind = "python3"\nentry = "sync.py"', 'kind = "binary"\nentry = "bin/sample"')

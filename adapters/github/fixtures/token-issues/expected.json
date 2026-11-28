@@ -1,0 +1,38 @@
+{
+  "counts": {
+    "item": 3
+  },
+  "records": [
+    {
+      "model": "item",
+      "external_id": "repo:1",
+      "fields": {
+        "kind": "repository",
+        "state": "private"
+      }
+    },
+    {
+      "model": "item",
+      "external_id": "issue:5001",
+      "fields": {
+        "kind": "issue",
+        "title": "Crash on start",
+        "repo": "ana/tool",
+        "number": 1,
+        "state": "open",
+        "author": "bob",
+        "labels": "bug",
+        "relation": "involved"
+      }
+    },
+    {
+      "model": "item",
+      "external_id": "issue:5002",
+      "fields": {
+        "kind": "pull_request",
+        "number": 2,
+        "state": "merged"
+      }
+    }
+  ]
+}

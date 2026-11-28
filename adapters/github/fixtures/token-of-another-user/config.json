@@ -1,0 +1,5 @@
+{
+  "username": "ana",
+  "token": "test-token",
+  "recorded_api": "{fixture}/api"
+}

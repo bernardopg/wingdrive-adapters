@@ -13,8 +13,10 @@ pull requests come incrementally through `/issues?since=`.
 Only the Python standard library is used.
 """
 
+import email.message
 import json
 import os
+import pathlib
 import re
 import sys
 import time
@@ -56,11 +58,46 @@ def api_base():
     return API
 
 
+def recorded_responses(config):
+    """Responses a test case recorded, or None to ask GitHub.
+
+    The contract harness runs this adapter without a network fake, so its cases ship the API's
+    answers in `fixtures/<case>/api/responses.json` and point `recorded_api` at that folder.
+    Only folders inside this adapter's own `fixtures/` are accepted, so the setting can never make
+    the adapter read anything else.
+    """
+    folder = str(config.get("recorded_api") or "").strip()
+    if not folder:
+        return None
+    fixtures = (pathlib.Path(__file__).resolve().parent / "fixtures").resolve()
+    path = pathlib.Path(folder).resolve()
+    if fixtures not in path.parents:
+        raise InputError("recorded_api must be a folder inside the adapter's fixtures")
+    with open(path / "responses.json", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
 class Client:
-    def __init__(self, token):
+    def __init__(self, token, recorded=None):
         self.base = api_base()
         self.token = token
         self.requests = 0
+        self.recorded = recorded
+
+    def replay(self, url):
+        """A recorded answer for `url`: (json, next page URL or None), or the HTTPError it got."""
+        key = url[len(self.base):]
+        if key not in self.recorded:
+            raise ValueError(f"no recorded response for {key}")
+        answer = self.recorded[key]
+        status = answer.get("status", 200)
+        if status != 200:
+            headers = email.message.Message()
+            for name, value in (answer.get("headers") or {}).items():
+                headers[name] = value
+            raise urllib.error.HTTPError(url, status, answer.get("reason", ""), headers, None)
+        following = answer.get("next")
+        return answer.get("body"), self.base + following if following else None
 
     def get(self, url):
         """GET a URL under the API root; returns (json, next page URL or None)."""
@@ -74,6 +111,8 @@ class Client:
             request.add_header("Authorization", f"Bearer {self.token}")
         self.requests += 1
         try:
+            if self.recorded is not None:
+                return self.replay(url)
             with urllib.request.urlopen(request, timeout=30) as response:
                 body = json.loads(response.read().decode("utf-8"))
                 return body, next_link(response.headers.get("Link", ""))
@@ -209,7 +248,7 @@ def sync(payload):
     if username and not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", username):
         raise InputError(f"username is not a GitHub user name: {username}")
 
-    client = Client(token)
+    client = Client(token, recorded_responses(config))
     if token:
         me, _ = client.get(f"{client.base}/user")
         login = me.get("login", "")

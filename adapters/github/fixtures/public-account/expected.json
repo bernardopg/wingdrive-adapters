@@ -1,0 +1,38 @@
+{
+  "counts": {
+    "item": 4
+  },
+  "records": [
+    {
+      "model": "item",
+      "external_id": "repo:1",
+      "fields": {
+        "kind": "repository",
+        "title": "ana/tool",
+        "repo": "ana/tool",
+        "relation": "owner",
+        "state": "public",
+        "author": "ana",
+        "labels": "cli",
+        "url": "https://github.com/ana/tool"
+      }
+    },
+    {
+      "model": "item",
+      "external_id": "repo:3",
+      "fields": {
+        "title": "ana/old",
+        "relation": "owner"
+      }
+    },
+    {
+      "model": "item",
+      "external_id": "repo:10",
+      "fields": {
+        "title": "bob/lib",
+        "relation": "starred",
+        "author": "bob"
+      }
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "/user": {
+    "body": {
+      "message": "Bad credentials"
+    },
+    "reason": "Unauthorized",
+    "status": 401
+  }
+}
