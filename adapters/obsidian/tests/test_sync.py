@@ -271,6 +271,37 @@ class Detect(unittest.TestCase):
             )
 
 
+class DetectMac(unittest.TestCase):
+    """macOS keeps obsidian.json under ~/Library/Application Support, and iCloud vaults live in
+    ~/Library/Mobile Documents. The layout is faked under a temporary HOME, so this runs anywhere."""
+
+    def test_finds_local_and_icloud_vaults_in_the_macos_layout(self):
+        with tempfile.TemporaryDirectory() as home:
+            local = pathlib.Path(home) / "Documents" / "Notes"
+            icloud = pathlib.Path(home) / "Library" / "Mobile Documents" / "iCloud~md~obsidian" / "Documents" / "Phone"
+            (local / ".obsidian").mkdir(parents=True)
+            (icloud / ".obsidian").mkdir(parents=True)
+            config = pathlib.Path(home) / "Library" / "Application Support" / "obsidian"
+            config.mkdir(parents=True)
+            (config / "obsidian.json").write_text(json.dumps({"vaults": {
+                "a1": {"path": str(local), "ts": 1700000000000, "open": True},
+                "b2": {"path": str(icloud), "ts": 1800000000000},
+            }}))
+            env = {"PATH": os.environ.get("PATH", ""), "HOME": home, "USERPROFILE": home}
+            if sys.platform == "win32":
+                env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", "")
+            result = subprocess.run(
+                [sys.executable, "-I", str(ENTRY)],
+                input=json.dumps({"contract": 1, "mode": "detect", "config": {}, "cursor": None, "data_dir": None}),
+                capture_output=True, text=True, encoding="utf-8", env=env, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                [json.loads(line) for line in result.stdout.splitlines()],
+                [{"suggest": {"vault_path": [str(icloud), str(local)]}}],
+            )
+
+
 class DetectConfined(unittest.TestCase):
     def test_inside_the_sandbox_missing_folders_are_still_offered(self):
         with tempfile.TemporaryDirectory() as home:

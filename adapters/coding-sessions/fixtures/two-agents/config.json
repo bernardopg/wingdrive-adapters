@@ -1,1 +1,1 @@
-{"claude_dir": "{fixture}/claude", "codex_dir": "{fixture}/codex"}
+{"claude_dir": "{fixture}/claude", "codex_dir": "{fixture}/codex", "opencode_db": "{fixture}/none.db"}

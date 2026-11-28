@@ -1,0 +1,19 @@
+{
+  "counts": {"session": 1, "tool": 3, "file": 2},
+  "records": [
+    {"model": "session", "external_id": "opencode:ses_main",
+     "fields": {"title": "Add a menu to the shop", "agent": "OpenCode", "project": "/home/ana/shop",
+                "started": "2026-11-28T10:00:00.000Z", "updated": "2026-11-28T10:00:05.000Z",
+                "prompts": 1, "tools": "apply_patch, edit, read",
+                "files": "/home/ana/shop/src/app.ts\n/home/ana/shop/src/menu.ts",
+                "summary": "Add a menu to the shop. My key is [secret]\n\nThe menu is in place.",
+                "body": "## You\nAdd a menu to the shop. My key is [secret]\n\n## Agent\nI will add it.\n\n## Agent\nThe menu is in place."}},
+    {"model": "file", "external_id": "/home/ana/shop/src/menu.ts",
+     "fields": {"path": "/home/ana/shop/src/menu.ts", "name": "menu.ts"}}
+  ],
+  "absent": [
+    {"model": "session", "external_id": "opencode:ses_child"},
+    {"model": "session", "external_id": "opencode:ses_tools"},
+    {"model": "tool", "external_id": "bash"}
+  ]
+}

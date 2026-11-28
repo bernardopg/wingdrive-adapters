@@ -1,6 +1,8 @@
 """Tests for the GitHub adapter: runs sync.py against a local fake of the GitHub API."""
 
+import contextlib
 import http.server
+import io
 import json
 import os
 import pathlib
@@ -34,7 +36,18 @@ def repo(rid, name, owner="ana", **extra):
     return data
 
 
-def issue(iid, title, updated, pull=False, merged=False):
+def comment(cid, body, author="carol", updated="2025-03-02T00:00:00Z"):
+    return {
+        "id": cid,
+        "body": body,
+        "user": {"login": author},
+        "html_url": f"https://github.com/ana/tool/issues/1#issuecomment-{cid}",
+        "created_at": "2025-03-01T12:00:00Z",
+        "updated_at": updated,
+    }
+
+
+def issue(iid, title, updated, pull=False, merged=False, comments=0):
     data = {
         "id": iid,
         "number": iid % 1000,
@@ -47,6 +60,7 @@ def issue(iid, title, updated, pull=False, merged=False):
         "repository_url": "https://api.github.com/repos/ana/tool",
         "created_at": "2025-03-01T00:00:00Z",
         "updated_at": updated,
+        "comments": comments,
     }
     if pull:
         data["pull_request"] = {"merged_at": "2025-03-05T00:00:00Z" if merged else None}
@@ -64,7 +78,7 @@ class FakeGitHub(http.server.BaseHTTPRequestHandler):
         query = dict(urllib.parse.parse_qsl(url.query))
         server = self.server
         server.calls.append((url.path, query))
-        if server.rate_limited:
+        if server.rate_limited or url.path in server.limited_paths:
             self.send_response(403)
             self.send_header("X-RateLimit-Remaining", "0")
             self.send_header("X-RateLimit-Reset", "0")
@@ -110,6 +124,7 @@ class GitHubTest(unittest.TestCase):
         self.server.routes = {}
         self.server.calls = []
         self.server.rate_limited = False
+        self.server.limited_paths = set()
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.home = tempfile.TemporaryDirectory()
 
@@ -118,8 +133,8 @@ class GitHubTest(unittest.TestCase):
         self.server.server_close()
         self.home.cleanup()
 
-    def run_adapter(self, config=None, cursor=None, mode=None):
-        payload = {"contract": 1, "config": config or {}, "cursor": cursor, "data_dir": None}
+    def run_adapter(self, config=None, cursor=None, mode=None, data_dir=None):
+        payload = {"contract": 1, "config": config or {}, "cursor": cursor, "data_dir": data_dir}
         if mode:
             payload["mode"] = mode
         env = {
@@ -211,6 +226,90 @@ class GitHubTest(unittest.TestCase):
         since = [query.get("since") for path, query in self.server.calls if path == "/issues"]
         self.assertEqual(set(since), {"2025-03-04T00:00:00Z"})
         self.assertEqual(set(again.upserts), {"issue:103"})
+
+    def token_account(self, issues, comments):
+        self.server.routes["/user"] = [{"login": "ana"}]
+        self.server.routes["/user/repos"] = [[repo(1, "tool")]]
+        self.server.routes["/user/starred"] = [[]]
+        self.server.routes["/issues"] = [issues]
+        for number, pages in comments.items():
+            self.server.routes[f"/repos/ana/tool/issues/{number}/comments"] = pages
+
+    def comment_calls(self):
+        return [path for path, _ in self.server.calls if path.endswith("/comments")]
+
+    def test_comments_become_records_of_their_issue(self):
+        state = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, state)
+        config = {"username": "ana", "token": "good-token"}
+        self.token_account(
+            [issue(101, "Crash on start", "2025-03-02T00:00:00Z", comments=3),
+             issue(102, "Quiet one", "2025-03-03T00:00:00Z")],
+            {101: [[comment(1, "I see it too"), comment(2, "Fixed on main")], [comment(3, "Thanks", author="ana")]]},
+        )
+        run = self.run_adapter(config, data_dir=state)
+        self.assertEqual(run.result.returncode, 0, run.result.stderr)
+        self.assertEqual(self.comment_calls(), ["/repos/ana/tool/issues/101/comments"] * 2)
+        records = [op for op in run.ops if op.get("upsert") == "comment"]
+        self.assertEqual([op["external_id"] for op in records], ["comment:1", "comment:2", "comment:3"])
+        self.assertEqual(records[0]["fields"]["item_id"], "issue:101")
+        self.assertEqual(records[0]["fields"]["author"], "carol")
+        # The issue's comments field is written after its record, with every comment in order.
+        updates = [op for op in run.ops if op.get("external_id") == "issue:101"]
+        self.assertEqual(updates[-1]["fields"],
+                         {"comments": "carol: I see it too\n\ncarol: Fixed on main\n\nana: Thanks"})
+        self.assertNotIn("comments_pending", run.cursor)
+
+        # The issue changes and one comment is gone: it is deleted, the others written again.
+        self.server.calls.clear()
+        self.token_account(
+            [issue(101, "Crash on start", "2025-03-09T00:00:00Z", comments=2)],
+            {101: [[comment(1, "I see it too"), comment(3, "Thanks", author="ana")]]},
+        )
+        again = self.run_adapter(config, run.cursor, data_dir=state)
+        self.assertEqual(again.deletes, ["comment:2"])
+        self.assertEqual(again.upserts["issue:101"], {"comments": "carol: I see it too\n\nana: Thanks"})
+
+        # Every comment deleted: the count is 0, but the issue is still listed to delete them.
+        self.token_account([issue(101, "Crash on start", "2025-03-10T00:00:00Z")], {101: [[]]})
+        last = self.run_adapter(config, again.cursor, data_dir=state)
+        self.assertEqual(sorted(last.deletes), ["comment:1", "comment:3"])
+
+    def test_comments_can_be_left_out(self):
+        self.token_account([issue(101, "Crash", "2025-03-02T00:00:00Z", comments=1)], {101: [[comment(1, "x")]]})
+        run = self.run_adapter({"username": "ana", "token": "good-token", "include_comments": "false"})
+        self.assertEqual(run.result.returncode, 0, run.result.stderr)
+        self.assertEqual(self.comment_calls(), [])
+        self.assertNotIn("comment:1", run.upserts)
+
+    def test_rate_limited_comments_wait_in_the_cursor(self):
+        self.token_account([issue(101, "Crash", "2025-03-02T00:00:00Z", comments=1)], {101: [[comment(1, "x")]]})
+        self.server.limited_paths = {"/repos/ana/tool/issues/101/comments"}
+        run = self.run_adapter({"username": "ana", "token": "good-token"})
+        self.assertEqual(run.result.returncode, 0, run.result.stderr)
+        self.assertIn("issue:101", run.upserts)
+        self.assertNotIn("comment:1", run.upserts)
+        self.assertEqual(json.loads(run.cursor)["comments_pending"], [["issue:101", "ana/tool", 101]])
+
+        # Next sync: no issue changed, but the pending one gets its comments.
+        self.server.limited_paths = set()
+        self.server.routes["/issues"] = [[]]
+        again = self.run_adapter({"username": "ana", "token": "good-token"}, run.cursor)
+        self.assertIn("comment:1", again.upserts)
+        self.assertNotIn("comments_pending", json.loads(again.cursor))
+
+    def test_comments_stop_at_the_time_budget(self):
+        sys.path.insert(0, str(ENTRY.parent))
+        import sync
+
+        self.addCleanup(setattr, sync, "COMMENT_SECONDS", sync.COMMENT_SECONDS)
+        sync.COMMENT_SECONDS = -1
+        queue = [["issue:1", "ana/tool", 1], ["issue:2", "ana/tool", 2]]
+        client = sync.Client("good-token")
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            written, left = sync.sync_comments(client, queue, {})
+        self.assertIn("2 issues wait for their comments", out.getvalue())
+        self.assertEqual((written, left, client.requests), (0, queue, 0))
 
     def test_token_of_another_user_is_refused(self):
         self.server.routes["/user"] = [{"login": "mallory"}]

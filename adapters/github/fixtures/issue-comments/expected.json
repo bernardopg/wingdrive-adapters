@@ -1,0 +1,42 @@
+{
+  "counts": {
+    "item": 2,
+    "comment": 2
+  },
+  "records": [
+    {
+      "model": "item",
+      "external_id": "issue:5001",
+      "fields": {
+        "kind": "issue",
+        "title": "Crash on start",
+        "comments": "carol: I see it too on Linux.\n\nana: Fixed on main, thanks."
+      }
+    },
+    {
+      "model": "item",
+      "external_id": "issue:5003",
+      "fields": {
+        "kind": "issue",
+        "comments": null
+      }
+    },
+    {
+      "model": "comment",
+      "external_id": "comment:9001",
+      "fields": {
+        "body": "I see it too on Linux.",
+        "author": "carol",
+        "url": "https://github.com/ana/tool/issues/1#issuecomment-9001",
+        "created": "2025-03-01T10:00:00Z"
+      }
+    },
+    {
+      "model": "comment",
+      "external_id": "comment:9002",
+      "fields": {
+        "author": "ana"
+      }
+    }
+  ]
+}

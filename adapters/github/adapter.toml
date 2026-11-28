@@ -1,14 +1,14 @@
 [adapter]
 id = "github"
 name = "GitHub"
-summary = "Search your GitHub repositories, stars, issues and pull requests next to your files."
+summary = "Search your GitHub repositories, stars, issues, pull requests and their comments next to your files."
 description = """
 Indexes a GitHub account: the repositories it owns and starred, and with a token the issues and \
-pull requests it opened, was assigned or mentioned in, including private ones the token can see. \
-Each sync asks GitHub only for what changed since the last one, and drops repositories you \
+pull requests it opened, was assigned or mentioned in, with their comments, including private \
+ones the token can see. Each sync asks GitHub only for what changed since the last one, and drops repositories you \
 deleted or unstarred. Read only: it never changes anything on GitHub.\
 """
-version = "1.0.4"
+version = "1.1.0"
 author = "WingDrive"
 license = "Apache-2.0"
 homepage = "https://github.com/bernardopg/wingdrive-adapters/tree/main/adapters/github"
@@ -18,9 +18,9 @@ platforms = ["linux", "macos", "windows"]
 categories = ["code"]
 
 [adapter.i18n.pt]
-summary = "Busque seus repositórios, estrelas, issues e pull requests do GitHub junto com seus arquivos."
+summary = "Busque seus repositórios, estrelas, issues, pull requests e comentários do GitHub junto com seus arquivos."
 description = """
-Indexa uma conta do GitHub: os repositórios dela e os que ela marcou com estrela e, com um token, as issues e os pull requests de que ela participa, inclusive os privados que o token alcança. Cada sincronização pede ao GitHub só o que mudou desde a anterior e remove repositórios apagados ou sem estrela. Só leitura: nunca altera nada no GitHub.
+Indexa uma conta do GitHub: os repositórios dela e os que ela marcou com estrela e, com um token, as issues e os pull requests de que ela participa, com os comentários, inclusive os privados que o token alcança. Cada sincronização pede ao GitHub só o que mudou desde a anterior e remove repositórios apagados ou sem estrela. Só leitura: nunca altera nada no GitHub.
 """
 
 [adapter.i18n.pt.config.username]
@@ -39,11 +39,15 @@ description = "Indexar os repositórios em que você deu estrela."
 name = "Issues e pull requests"
 description = "Com um token, indexar as issues e os pull requests de que você participa."
 
+[adapter.i18n.pt.config.include_comments]
+name = "Comentários"
+description = "Com um token, indexar os comentários das issues e dos pull requests."
+
 [adapter.runtime]
 kind = "python3"
 entry = "sync.py"
 python = "3.9"
-timeout = 900
+timeout = 1800
 schedule = "0 * * * *"
 detect = true
 
@@ -83,6 +87,14 @@ type = "boolean"
 default = true
 required = false
 
+[[adapter.config]]
+key = "include_comments"
+name = "Comments"
+description = "With a token, index the comments of those issues and pull requests (true or false)."
+type = "boolean"
+default = true
+required = false
+
 [data_type]
 id = "github"
 name = "GitHub item"
@@ -101,11 +113,22 @@ fields.relation = "string"
 fields.url = "string"
 fields.created = "datetime"
 fields.updated = "datetime"
+fields.comments = "text"
+
+[models.comment]
+fields.body = "text"
+fields.author = "string"
+fields.url = "string"
+fields.created = "datetime"
+fields.updated = "datetime"
+
+[models.comment.relations]
+belongs_to = ["item"]
 
 [search]
 primary_model = "item"
 title = "title"
 preview = "body"
 subtitle = "repo"
-search_fields = ["title", "body", "repo", "labels", "author"]
+search_fields = ["title", "body", "comments", "repo", "labels", "author"]
 date_field = "updated"
