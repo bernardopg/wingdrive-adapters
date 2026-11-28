@@ -449,15 +449,21 @@ def open_readonly(path):
     """
     uri = Path(path).resolve().as_uri()
     try:
-        conn = sqlite3.connect(uri + "?mode=ro", uri=True, timeout=10)
-        conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
-        return conn
+        return checked(sqlite3.connect(uri + "?mode=ro", uri=True, timeout=10))
     except sqlite3.Error:
         wal = Path(str(path) + "-wal")
         if wal.exists() and wal.stat().st_size > 0:
             raise
-    conn = sqlite3.connect(uri + "?immutable=1", uri=True)
-    conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
+    return checked(sqlite3.connect(uri + "?immutable=1", uri=True))
+
+
+def checked(conn):
+    """`conn` once a first read works; closed otherwise, so Windows does not keep the file locked."""
+    try:
+        conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
+    except sqlite3.Error:
+        conn.close()
+        raise
     return conn
 
 
