@@ -296,6 +296,9 @@ def find_harness() -> list[str] | None:
     """The contract harness on this machine: `wing-adapter-test`, or `wing adapter test`."""
     override = os.environ.get("WING_ADAPTER_TEST")
     if override:
+        # `wing adapter validate` points this at its own `wing`, which takes `adapter test` first.
+        if Path(override).stem == "wing":
+            return [override, "adapter", "test"]
         return [override]
     found = shutil.which("wing-adapter-test")
     if found:

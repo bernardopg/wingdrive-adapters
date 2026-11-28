@@ -8,7 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import ROOT, RegistryError, announcement, build_index, render_report, report
+from . import ROOT, RegistryError, announcement, build_index, check_folder, render_report, report
 from . import check as run_checks
 
 
@@ -25,6 +25,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     check.add_argument("--report", type=Path, help="also write the review comment for a pull request here")
 
+    folder = commands.add_parser("check", help="run Wingbot's checks on one adapter folder (wing adapter validate)")
+    folder.add_argument("folder", type=Path, help="the folder that holds adapter.toml")
+    folder.add_argument("--run-code", action="store_true", help="also run the adapter's tests and the contract harness")
+
     build = commands.add_parser("build", help="write archives, icons and index.json")
     build.add_argument("--out", type=Path, required=True)
     build.add_argument("--sequence", type=int, required=True)
@@ -40,18 +44,17 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     try:
+        if args.command == "check":
+            _, problems, results = check_folder(args.folder, args.run_code)
+            print_results(results, problems)
+            return 1 if problems else 0
         if args.command == "validate":
             previous = json.loads(args.previous.read_text()) if args.previous and args.previous.is_file() else None
             with tempfile.TemporaryDirectory() as tmp:
                 adapters, problems, results = run_checks(ROOT, previous, Path(tmp), args.run_code)
                 if args.report:
                     args.report.write_text(render_report(adapters, problems, results, previous))
-            for adapter_id, rows in results.items():
-                for row in rows:
-                    print(f"{'pass' if row.passed else 'FAIL'} {adapter_id}: {row.name}")
-            for problem in problems:
-                print(f"error: {problem}")
-            print(f"{len(problems)} problem(s)")
+            print_results(results, problems)
             return 1 if problems else 0
         if args.command == "announce":
             previous = json.loads(args.previous.read_text()) if args.previous and args.previous.is_file() else None
@@ -71,6 +74,15 @@ def main(argv: list[str] | None = None) -> int:
     except RegistryError as error:
         print(f"error: {error}")
         return 1
+
+
+def print_results(results: dict, problems: list[str]) -> None:
+    for adapter_id, rows in results.items():
+        for row in rows:
+            print(f"{'pass' if row.passed else 'FAIL'} {adapter_id}: {row.name}")
+    for problem in problems:
+        print(f"error: {problem}")
+    print(f"{len(problems)} problem(s)")
 
 
 if __name__ == "__main__":

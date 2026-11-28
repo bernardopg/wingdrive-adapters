@@ -164,3 +164,47 @@ class CodeScan(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FolderCheck(unittest.TestCase):
+    """`wingreg check <folder>`, which `wing adapter validate` runs on an adapter outside the registry."""
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.adapter = self.tmp / "my-adapter"
+        shutil.copytree(TEMPLATE, self.adapter, ignore=shutil.ignore_patterns("__pycache__"))
+
+    def problems(self, folder: Path, run_code: bool = True) -> list[str]:
+        _, problems, _ = wingreg.check_folder(folder, run_code=run_code)
+        return problems if HARNESS else missing_harness(problems)
+
+    def test_the_template_passes_as_it_is(self) -> None:
+        self.assertEqual(self.problems(self.adapter), [])
+
+    def test_a_community_folder_needs_a_license(self) -> None:
+        (self.adapter / "LICENSE").unlink()
+        self.assertEqual(self.problems(self.adapter), ["text-notes: LICENSE file is missing"])
+        (self.adapter / "LICENSE").write_text("Apache License 2.0\n")
+        self.assertEqual(self.problems(self.adapter), [])
+        _, _, results = wingreg.check_folder(self.adapter, run_code=True)
+        self.assertEqual([row.name for row in results["text-notes"]][:3], ["Structure", "Code scan", "Adapter tests"])
+
+    def test_the_same_code_scan_runs(self) -> None:
+        sync = self.adapter / "sync.py"
+        sync.write_text(sync.read_text() + "\nimport urllib.request\nURL = 'https://tracker.example.net/x'\n")
+        problems = self.problems(self.adapter, run_code=False)
+        self.assertTrue(any("tracker.example.net" in p for p in problems), problems)
+
+    def test_official_adapters_share_the_registry_license(self) -> None:
+        self.assertEqual(self.problems(ROOT / "adapters" / "obsidian", run_code=False), [])
+
+    def test_a_folder_without_a_manifest_is_an_error(self) -> None:
+        with self.assertRaises(wingreg.RegistryError):
+            wingreg.check_folder(self.tmp)
+
+    def test_the_wing_cli_is_called_with_its_subcommand(self) -> None:
+        with mock.patch.dict(os.environ, {"WING_ADAPTER_TEST": "/opt/bin/wing"}):
+            self.assertEqual(checks.find_harness(), ["/opt/bin/wing", "adapter", "test"])
+        with mock.patch.dict(os.environ, {"WING_ADAPTER_TEST": "/opt/bin/wing-adapter-test"}):
+            self.assertEqual(checks.find_harness(), ["/opt/bin/wing-adapter-test"])
