@@ -51,6 +51,12 @@ uv run --python 3.12 --with jsonschema python -m unittest discover -s tests
 cd tools && uv run --python 3.12 --with jsonschema python -m wingreg validate --run-code
 ```
 
+To check one adapter folder that is not in the registry yet, in its own repository, run
+`wing adapter validate` there. It runs `python -m wingreg check <folder> --run-code` from a copy of
+this repository (cloned on first use, or the one in `--registry`), so the result is the one Wingbot
+will post. By hand: `cd tools && uv run --python 3.12 --with jsonschema python -m wingreg check
+/path/to/adapter --run-code`.
+
 `--run-code` also runs each adapter's tests and the contract harness, as Wingbot does. It needs
 `wing-adapter-test` (or a `wing` with `wing adapter test`) on `PATH`, or its path in
 `WING_ADAPTER_TEST`; build it in a WingDrive checkout with

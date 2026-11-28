@@ -414,6 +414,14 @@ def check(
     """
     adapters, problems = collect(root, workdir)
     problems += version_problems(adapters, previous)
+    results = check_adapters(adapters, problems, run_code)
+    return adapters, problems, results
+
+
+def check_adapters(
+    adapters: list[Adapter], problems: list[str], run_code: bool
+) -> dict[str, list[checks.CheckResult]]:
+    """The per-adapter rows of the review table; problems found are appended to `problems`."""
     digests = checks.kit_digests(KIT_RELEASES)
     prefix = checks.offline_prefix() if run_code else []
     harness = checks.find_harness() if run_code else None
@@ -449,6 +457,40 @@ def check(
             if not row.passed:
                 lines = row.detail.strip().splitlines()
                 problems.append(f"{adapter.id}: {row.name.lower()} failed: {lines[-1] if lines else 'no output'}")
+    return results
+
+
+def check_folder(
+    directory: Path, run_code: bool = False
+) -> tuple[list[Adapter], list[str], dict[str, list[checks.CheckResult]]]:
+    """The checks Wingbot runs, for one adapter folder that is not in the registry yet.
+
+    `wing adapter validate` calls this through `python -m wingreg check`. The folder is checked as
+    a community submission from its own repository (so it needs a LICENSE file), unless it lives in
+    this registry's `adapters/`, where official adapters share the registry's license. Entry
+    checks that need a pull request (a pinned tag, the version against the published index) do not
+    apply to a folder.
+    """
+    directory = directory.resolve()
+    manifest_path = directory / "adapter.toml"
+    if not manifest_path.is_file():
+        raise RegistryError(f"{directory}: adapter.toml is missing")
+    try:
+        adapter_id = tomllib.loads(manifest_path.read_text())["adapter"]["id"]
+    except (tomllib.TOMLDecodeError, KeyError, TypeError) as error:
+        raise RegistryError(f"{directory}/adapter.toml: no [adapter] id ({error})") from error
+    official = (ROOT / "adapters") in directory.parents
+    source = {"type": "local", "path": str(directory)} if official else {"type": "git"}
+    entry = {"id": str(adapter_id), "trust": "official" if official else "community", "source": source}
+    problems: list[str] = []
+    adapters: list[Adapter] = []
+    try:
+        adapter = load_adapter(entry, directory)
+        adapters.append(adapter)
+        problems += adapter.problems
+    except RegistryError as error:
+        problems.append(str(error))
+    results = check_adapters(adapters, problems, run_code)
     return adapters, problems, results
 
 
