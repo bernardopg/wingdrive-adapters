@@ -9,7 +9,9 @@ files, not only Obsidian vaults.
 1. In WingDrive, open **Sources > Add source > Adapters** and install **Obsidian**, or run
    `wing adapters install obsidian`.
 2. Add a source. The vault you opened last in Obsidian is filled in, and the others are offered;
-   any folder of Markdown files works too.
+   any folder of Markdown files works too. Obsidian's list of vaults is read on Linux (native,
+   Flatpak and Snap), macOS (`~/Library/Application Support/obsidian`, iCloud vaults included) and
+   Windows (`%APPDATA%\obsidian`).
 3. Optionally list folders or files to skip, separated by commas: `Templates, Archive/*, *.excalidraw.md`.
 
 The adapter needs Python 3.9 or later (`python3` on Linux and macOS, `python` on Windows). It uses

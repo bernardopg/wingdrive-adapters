@@ -9,7 +9,10 @@ arquivos Markdown, não só com cofres do Obsidian.
 1. No WingDrive, abra **Fontes > Adicionar fonte > Adaptadores** e instale o **Obsidian**, ou rode
    `wing adapters install obsidian`.
 2. Adicione uma fonte. O cofre que você abriu por último no Obsidian já vem preenchido, e os outros
-   aparecem como opção; qualquer pasta de arquivos Markdown também serve.
+   aparecem como opção; qualquer pasta de arquivos Markdown também serve. A lista de cofres do
+   Obsidian é lida no Linux (nativo, Flatpak e Snap), no macOS
+   (`~/Library/Application Support/obsidian`, inclusive cofres do iCloud) e no Windows
+   (`%APPDATA%\obsidian`).
 3. Se quiser, liste pastas ou arquivos para ignorar, separados por vírgula:
    `Templates, Arquivo/*, *.excalidraw.md`.
 
