@@ -22,6 +22,8 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from . import checks
+
 ROOT = Path(__file__).resolve().parents[2]
 REGISTRY_URL = "https://github.com/bernardopg/wingdrive-adapters"
 ICON_MAX_BYTES = 64 * 1024
@@ -215,6 +217,10 @@ def load_adapter(entry: dict, directory: Path) -> Adapter:
     adapter.problems += [f"{entry['id']}: {p}" for p in kit_problems(directory)]
     if not (directory / "tests").is_dir():
         adapter.problems.append(f"{entry['id']}: tests/ is missing")
+    if not any((directory / "fixtures").glob("*/expected.json")):
+        adapter.problems.append(
+            f"{entry['id']}: fixtures/ has no case for the contract harness: add fixtures/<case>/expected.json"
+        )
     return adapter
 
 
@@ -398,17 +404,58 @@ def build_index(root: Path, out: Path, sequence: int, base_url: str, workdir: Pa
     return index
 
 
-def validate(root: Path = ROOT, previous: dict | None = None) -> list[str]:
+def check(
+    root: Path, previous: dict | None, workdir: Path, run_code: bool = False
+) -> tuple[list[Adapter], list[str], dict[str, list[checks.CheckResult]]]:
+    """Every check, with one result row per check and adapter for the review table.
+
+    Without `run_code` only the static checks run. With it, each adapter's own tests and the
+    contract harness run too, without network where bubblewrap can start.
+    """
+    adapters, problems = collect(root, workdir)
+    problems += version_problems(adapters, previous)
+    digests = checks.kit_digests(KIT_RELEASES)
+    prefix = checks.offline_prefix() if run_code else []
+    harness = checks.find_harness() if run_code else None
+    if run_code and harness is None:
+        problems.append(
+            "the contract harness was not found: build `wing-adapter-test` (cargo build -p wing-archive "
+            "--bin wing-adapter-test in bernardopg/wingdrive) and put it on PATH or in WING_ADAPTER_TEST"
+        )
+    results: dict[str, list[checks.CheckResult]] = {}
+    for adapter in adapters:
+        icon = adapter.directory / adapter.meta.get("icon", "") if not adapter.problems else None
+        if icon is not None and icon.is_file():
+            try:
+                render_png(icon.read_bytes())
+            except RegistryError as error:
+                adapter.problems.append(f"{adapter.id}: {error}")
+                problems.append(f"{adapter.id}: {error}")
+        rows = [checks.CheckResult("Structure", not adapter.problems, "\n".join(adapter.problems))]
+        results[adapter.id] = rows
+        if adapter.problems:
+            continue
+        found = checks.scan_code(adapter.directory, adapter.manifest, digests)
+        found += checks.scan_secrets(adapter.directory)
+        rows.append(checks.CheckResult("Code scan", not found, "\n".join(found)))
+        problems += [f"{adapter.id}: {p}" for p in found]
+        if not run_code:
+            continue
+        ran = [checks.run_tests(adapter.directory, prefix)]
+        if harness:
+            ran.append(checks.run_harness(adapter.directory, [*prefix, *harness]))
+        for row in ran:
+            rows.append(row)
+            if not row.passed:
+                lines = row.detail.strip().splitlines()
+                problems.append(f"{adapter.id}: {row.name.lower()} failed: {lines[-1] if lines else 'no output'}")
+    return adapters, problems, results
+
+
+def validate(root: Path = ROOT, previous: dict | None = None, run_code: bool = False) -> list[str]:
     with tempfile.TemporaryDirectory() as tmp:
-        adapters, problems = collect(root, Path(tmp))
-        for adapter in adapters:
-            icon = adapter.directory / adapter.meta.get("icon", "")
-            if icon.is_file():
-                try:
-                    render_png(icon.read_bytes())
-                except RegistryError as error:
-                    problems.append(f"{adapter.id}: {error}")
-    return problems + version_problems(adapters, previous)
+        _, problems, _ = check(root, previous, Path(tmp), run_code)
+    return problems
 
 
 # ── Review report ───────────────────────────────────────────────────────────
@@ -429,10 +476,15 @@ def _permission_lines(permissions: dict, before: dict | None) -> list[str]:
     return lines or ["- none: no files, network, secrets or programs"]
 
 
-def report(root: Path, previous: dict | None, workdir: Path) -> str:
+def report(root: Path, previous: dict | None, workdir: Path, run_code: bool = False) -> str:
     """Markdown for the pull request: what each changed adapter is and may access."""
-    adapters, problems = collect(root, workdir)
-    problems += version_problems(adapters, previous)
+    adapters, problems, results = check(root, previous, workdir, run_code)
+    return render_report(adapters, problems, results, previous)
+
+
+def render_report(
+    adapters: list[Adapter], problems: list[str], results: dict[str, list[checks.CheckResult]], previous: dict | None
+) -> str:
     published = {item["id"]: item for item in (previous or {}).get("adapters", [])}
     changed = [
         a for a in adapters
@@ -463,6 +515,26 @@ def report(root: Path, previous: dict | None, workdir: Path) -> str:
                if adapter.entry["source"].get("type") == "git" else ""),
             f"- runtime: `{runtime.get('kind')}` `{runtime.get('entry')}`, platforms: {', '.join(meta.get('platforms', []))}",
             "",
+        ]
+        source, old_source = adapter.entry["source"], (before or {}).get("source_entry") or {}
+        if (
+            source.get("type") == "git"
+            and old_source.get("type") == "git"
+            and old_source.get("commit") != source.get("commit")
+            and str(source.get("repository", "")).startswith("https://github.com/")
+        ):
+            repository = str(source["repository"]).removesuffix(".git")
+            out += [f"Changes since the last pin: {repository}/compare/{old_source['commit']}...{source['commit']}", ""]
+        rows = results.get(adapter.id, [])
+        if rows:
+            out += ["| Check | Result |", "|---|---|"]
+            out += [f"| {row.name} | {'pass' if row.passed else '**fail**'} |" for row in rows]
+            out.append("")
+            for row in rows:
+                if row.detail and not row.passed:
+                    detail = row.detail.replace("`" * 3, "` ` `")[-4000:]
+                    out += [f"<details><summary>{row.name}</summary>", "", "`" * 3, detail, "`" * 3, "", "</details>", ""]
+        out += [
             "**Permissions**" + (" (compared with the published version)" if before else ""),
             "",
         ]

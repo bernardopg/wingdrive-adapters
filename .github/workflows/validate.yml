@@ -19,7 +19,11 @@ jobs:
   validate:
     name: Registry checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
+    env:
+      # The WingDrive commit whose contract harness (`wing-adapter-test`, crate wing-archive) runs
+      # every adapter's fixtures. Raise it when the harness or the adapter contract changes.
+      WINGDRIVE_HARNESS_REF: 9b9ee08137389b9a48b11f70247cdd40ce76a668
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -27,8 +31,37 @@ jobs:
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           enable-cache: false # nothing to cache: the tools use only jsonschema
-      - name: Install rsvg-convert
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq librsvg2-bin
+      - name: Install rsvg-convert and bubblewrap
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq librsvg2-bin bubblewrap
+      # Ubuntu 24.04 blocks the unprivileged user namespaces bubblewrap needs. The adapters' tests
+      # and the harness run inside it without network, as the daemon runs adapters.
+      - name: Allow bubblewrap
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Restore the contract harness
+        id: harness
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.local/wing-adapter-test
+          key: wing-adapter-test-${{ runner.os }}-${{ env.WINGDRIVE_HARNESS_REF }}
+      - name: Check out WingDrive for the harness
+        if: steps.harness.outputs.cache-hit != 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: bernardopg/wingdrive
+          ref: ${{ env.WINGDRIVE_HARNESS_REF }}
+          path: .wingdrive
+          persist-credentials: false
+      # Only wing-archive and its dependencies: a few minutes, once per WINGDRIVE_HARNESS_REF.
+      - name: Build the contract harness
+        if: steps.harness.outputs.cache-hit != 'true'
+        run: |
+          cd .wingdrive
+          cargo build --locked -p wing-archive --bin wing-adapter-test
+          mkdir -p ~/.local/wing-adapter-test
+          cp target/debug/wing-adapter-test ~/.local/wing-adapter-test/
+          cd .. && rm -rf .wingdrive
+      - name: Use the contract harness
+        run: echo "WING_ADAPTER_TEST=$HOME/.local/wing-adapter-test/wing-adapter-test" >> "$GITHUB_ENV"
       - name: Tooling tests
         run: uv run --python 3.12 --with jsonschema python -m unittest discover -s tests
       - name: Last published index
@@ -37,19 +70,26 @@ jobs:
         run: |
           gh release download --repo "$GITHUB_REPOSITORY" --pattern index.json --dir previous 2>/dev/null \
             || echo "No published index yet"
+      # Structure, code scan, each adapter's tests and the harness on its fixtures. The report for
+      # the pull request comes from the same run.
       - name: Entries and adapters
         run: |
+          mkdir -p review
           cd tools
-          uv run --python 3.12 --with jsonschema python -m wingreg validate --previous ../previous/index.json
-      - name: Review report
+          uv run --python 3.12 --with jsonschema python -m wingreg validate --previous ../previous/index.json \
+            --run-code --report ../review/report.md
+      - name: Pull request number for the comment workflow
         if: always() && github.event_name == 'pull_request'
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           mkdir -p review
-          cd tools
-          uv run --python 3.12 --with jsonschema python -m wingreg report --previous ../previous/index.json --out ../review/report.md
-          echo "$PR_NUMBER" > ../review/pr.txt
+          echo "$PR_NUMBER" > review/pr.txt
+          # The checks stopped before writing a report: say so instead of posting nothing.
+          if [ ! -f review/report.md ]; then
+            printf '%s\n' '<!-- wingbot-review -->' '## Wingbot review' '' \
+              '**Fails the registry checks.** They stopped early; see the Validate run log.' > review/report.md
+          fi
       - name: Keep the report for the comment workflow
         if: always() && github.event_name == 'pull_request'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

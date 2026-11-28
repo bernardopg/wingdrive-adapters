@@ -3,6 +3,12 @@
 ## Before you open a pull request
 
 - Your adapter lives in a public GitHub repository with a license, a README and tests.
+- It has at least one contract harness case in `fixtures/<case>/` (`config.json` and
+  `expected.json`, see Testing in `docs/core/adapters.mdx`), and its `tests/` pass with the standard
+  library's `unittest`. Both run without network, so cases ship the data they need.
+- It imports only the Python standard library and modules in its own folder, never runs code it
+  builds or downloads (`eval`, `exec`, `pickle.loads`, `importlib.import_module`), and starts only the
+  programs listed in `permissions.tools`.
 - `adapter.toml` declares contract 1 and every permission the adapter uses: paths it reads,
   network hosts it contacts, secrets it needs and tools it runs. Undeclared access fails review. On
   Linux it also fails at run time: the adapter runs in a sandbox where undeclared paths do not exist
@@ -73,6 +79,19 @@ adapter does not need for its purpose, obfuscated code, and binaries committed t
 Wingbot checks every push to your pull request and keeps one comment up to date with the result:
 the registry checks, the version change and the permissions, with new ones in bold. It labels the
 pull request `ready-for-review` when the checks pass and `needs-changes` when they do not.
+
+Each adapter the pull request adds or changes gets a table with these checks:
+
+| Check | What fails it |
+|---|---|
+| Structure | The entry or `adapter.toml` breaks the schema, a moved tag, a missing README section, icon, `tests/` or harness case |
+| Code scan | A host in the code that `permissions.network` lacks, network modules without declared hosts, a `~/` path outside `permissions.read`, a secret config field missing from `permissions.secrets`, a package outside the standard library, `eval`/`exec`-like calls, programs outside `permissions.tools`, a committed credential |
+| Adapter tests | `python -m unittest discover -s tests` fails, or finds no test |
+| Contract harness | `wing adapter test` fails on a case in `fixtures/` |
+
+The tests and the harness run inside bubblewrap without network. The code scan is a heuristic: a
+maintainer still reads the code. For an update, the report links the diff since the last pinned
+commit.
 
 Maintainers answer with commands in a comment:
 

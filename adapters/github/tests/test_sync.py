@@ -4,6 +4,7 @@ import http.server
 import json
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -226,6 +227,21 @@ class GitHubTest(unittest.TestCase):
         run = self.run_adapter({"username": "nobody"})
         self.assertEqual(run.result.returncode, 2)
         self.assertIn("no user with that name", run.result.stderr)
+
+    def test_recorded_answers_only_come_from_the_adapters_fixtures(self):
+        outside = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, outside)
+        pathlib.Path(outside, "responses.json").write_text("{}")
+        run = self.run_adapter({"username": "ana", "recorded_api": outside})
+        self.assertEqual(run.result.returncode, 2)
+        self.assertIn("inside the adapter's fixtures", run.result.stderr)
+        self.assertEqual(run.upserts, {})
+
+    def test_recorded_answers_replay_a_case(self):
+        case = ENTRY.parent / "fixtures" / "public-account" / "api"
+        run = self.run_adapter({"username": "ana", "recorded_api": str(case)})
+        self.assertEqual(run.result.returncode, 0, run.result.stderr)
+        self.assertEqual(sorted(run.upserts), ["repo:1", "repo:10", "repo:2", "repo:3"])
 
     def test_rate_limit_keeps_everything(self):
         self.public_account()

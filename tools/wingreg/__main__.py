@@ -8,7 +8,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import ROOT, RegistryError, announcement, build_index, report, validate
+from . import ROOT, RegistryError, announcement, build_index, render_report, report
+from . import check as run_checks
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -17,6 +18,12 @@ def main(argv: list[str] | None = None) -> int:
 
     check = commands.add_parser("validate", help="check every registry entry and its adapter")
     check.add_argument("--previous", type=Path, help="last published index.json, to check version bumps")
+    check.add_argument(
+        "--run-code",
+        action="store_true",
+        help="also run each adapter's tests and the contract harness (wing-adapter-test or wing adapter test)",
+    )
+    check.add_argument("--report", type=Path, help="also write the review comment for a pull request here")
 
     build = commands.add_parser("build", help="write archives, icons and index.json")
     build.add_argument("--out", type=Path, required=True)
@@ -35,7 +42,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "validate":
             previous = json.loads(args.previous.read_text()) if args.previous and args.previous.is_file() else None
-            problems = validate(ROOT, previous)
+            with tempfile.TemporaryDirectory() as tmp:
+                adapters, problems, results = run_checks(ROOT, previous, Path(tmp), args.run_code)
+                if args.report:
+                    args.report.write_text(render_report(adapters, problems, results, previous))
+            for adapter_id, rows in results.items():
+                for row in rows:
+                    print(f"{'pass' if row.passed else 'FAIL'} {adapter_id}: {row.name}")
             for problem in problems:
                 print(f"error: {problem}")
             print(f"{len(problems)} problem(s)")

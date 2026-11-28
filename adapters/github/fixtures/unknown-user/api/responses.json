@@ -1,0 +1,9 @@
+{
+  "/users/nobody-here/repos?type=owner&per_page=100": {
+    "body": {
+      "message": "Not Found"
+    },
+    "reason": "Not Found",
+    "status": 404
+  }
+}
