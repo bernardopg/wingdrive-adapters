@@ -1,0 +1,88 @@
+[adapter]
+id = "coding-sessions"
+name = "Coding agent sessions"
+summary = "Search your Claude Code and Codex sessions: what you asked, what the agent answered, the tools and files."
+description = """
+Reads the session transcripts that Claude Code and Codex keep on this computer. Each session keeps \
+its title, project folder, branch, dates, the tools the agent used, the files it edited, and the \
+text of your prompts and of the agent's answers. Tool output and the model's reasoning are left \
+out, and tokens, keys and passwords found in the text are replaced before anything is stored. \
+Syncs read only the sessions that changed and remove the ones you deleted. Nothing leaves your \
+computer.\
+"""
+version = "0.1.0"
+author = "WingDrive"
+license = "Apache-2.0"
+homepage = "https://github.com/bernardopg/wingdrive-adapters/tree/main/adapters/coding-sessions"
+icon = "icon.svg"
+contract = 1
+platforms = ["linux", "macos", "windows"]
+categories = ["code"]
+
+[adapter.i18n.pt]
+summary = "Busque nas suas sessões do Claude Code e do Codex: o que você pediu, o que o agente respondeu, ferramentas e arquivos."
+description = """
+Lê as transcrições de sessão que o Claude Code e o Codex guardam neste computador. Cada sessão guarda o título, a pasta do projeto, o branch, as datas, as ferramentas que o agente usou, os arquivos que editou e o texto dos seus pedidos e das respostas do agente. A saída das ferramentas e o raciocínio do modelo ficam de fora, e tokens, chaves e senhas encontrados no texto são substituídos antes de qualquer coisa ser guardada. As sincronizações leem só as sessões que mudaram e removem as que você apagou. Nada sai do seu computador.
+"""
+
+[adapter.i18n.pt.config.claude_dir]
+name = "Pasta do Claude Code"
+description = "Onde o Claude Code guarda as sessões. Deixe vazio para usar ~/.claude/projects."
+
+[adapter.i18n.pt.config.codex_dir]
+name = "Pasta do Codex"
+description = "Onde o Codex guarda as sessões. Deixe vazio para usar ~/.codex/sessions."
+
+[adapter.runtime]
+kind = "python3"
+entry = "sync.py"
+python = "3.9"
+timeout = 1800
+schedule = "*/30 * * * *"
+detect = true
+
+[adapter.permissions]
+read = [
+  "{config.claude_dir}",
+  "{config.codex_dir}",
+  "~/.claude/projects",
+  "~/.codex/sessions",
+]
+
+[[adapter.config]]
+key = "claude_dir"
+name = "Claude Code folder"
+description = "Where Claude Code keeps its sessions. Leave empty for ~/.claude/projects."
+type = "string"
+path_type = "folder"
+
+[[adapter.config]]
+key = "codex_dir"
+name = "Codex folder"
+description = "Where Codex keeps its sessions. Leave empty for ~/.codex/sessions."
+type = "string"
+path_type = "folder"
+
+[data_type]
+id = "coding-sessions"
+name = "Coding agent sessions"
+
+[models.session]
+fields.title = "string"
+fields.body = "text"
+fields.agent = "string"
+fields.project = "string"
+fields.branch = "string"
+fields.started = "datetime"
+fields.updated = "datetime"
+fields.prompts = "integer"
+fields.tools = "string"
+fields.files = "string"
+
+[search]
+primary_model = "session"
+title = "title"
+preview = "body"
+subtitle = "project"
+search_fields = ["title", "body", "project", "files"]
+date_field = "updated"
