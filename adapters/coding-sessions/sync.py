@@ -311,7 +311,8 @@ def sync(adapter):
 
 def detect(adapter):
     for key, default in (("claude_dir", CLAUDE_DEFAULT), ("codex_dir", CODEX_DEFAULT)):
-        path = os.path.expanduser(default)
+        # Path() gives the platform's separators: expanduser keeps the "/" of the default on Windows.
+        path = str(Path(os.path.expanduser(default)))
         # Both default folders are declared in the manifest, so the sandbox shows them.
         if os.path.isdir(path):
             adapter.suggest(key, [path])
