@@ -2,13 +2,18 @@
 """GitHub adapter for WingDrive (contract 1).
 
 Indexes a GitHub account: the repositories it owns, the ones it starred and,
-with a token, the issues and pull requests it takes part in. Every item is one
-record of the `item` model, told apart by `kind`.
+with a token, the issues and pull requests it takes part in and their comments.
+Every repository, issue and pull request is one record of the `item` model, told
+apart by `kind`; each comment is a `comment` record that belongs to its item, and
+the item's `comments` field holds their text so search finds it.
 
 Repositories are listed in full on each sync (a few requests even for large
 accounts) so unstarred or deleted ones disappear; the cursor keeps each
 repository's `updated_at` so only changed ones are written again. Issues and
-pull requests come incrementally through `/issues?since=`.
+pull requests come incrementally through `/issues?since=`. An issue that changed
+has its comments listed again, which is how edited and deleted comments are
+noticed; the ids seen per issue are kept in the source's state folder. Comments
+left over when the rate limit or the time budget runs out wait in the cursor.
 
 Only the Python standard library is used.
 """
@@ -28,7 +33,10 @@ API = "https://api.github.com"
 CURSOR_VERSION = 1
 MAX_BODY = 100_000
 MAX_PAGES = 200
-USER_AGENT = "WingDrive-adapter-github/1.0"
+# Listing comments takes one request per issue; stop after this long and continue next sync, so a
+# first sync of a large account stays inside the runtime timeout.
+COMMENT_SECONDS = 600
+USER_AGENT = "WingDrive-adapter-github/1.1"
 
 
 class InputError(Exception):
@@ -200,6 +208,28 @@ def issue_record(issue):
     }
 
 
+def comment_record(comment, parent):
+    body = comment.get("body") or ""
+    return {
+        "item_id": parent,
+        "body": body if len(body) <= MAX_BODY else body[:MAX_BODY],
+        "author": (comment.get("user") or {}).get("login", ""),
+        "url": comment.get("html_url", ""),
+        "created": comment.get("created_at"),
+        "updated": comment.get("updated_at"),
+    }
+
+
+def comments_text(comments):
+    """The comments of an issue as one searchable text, oldest first."""
+    parts = []
+    for comment in comments:
+        author = (comment.get("user") or {}).get("login", "")
+        parts.append(f"{author}: {(comment.get('body') or '').strip()}")
+    text = "\n\n".join(parts)
+    return text if len(text) <= MAX_BODY else text[:MAX_BODY]
+
+
 def repo_from_url(url):
     match = re.search(r"/repos/([^/]+/[^/]+)$", url)
     return match.group(1) if match else ""
@@ -213,6 +243,69 @@ def flag(config, key, default):
     if isinstance(value, str):
         return value.strip().lower() not in ("false", "no", "0", "off")
     return bool(value)
+
+
+def state_file(payload):
+    data_dir = payload.get("data_dir")
+    return pathlib.Path(data_dir) / "comments.json" if data_dir else None
+
+
+def load_comment_ids(path):
+    """{issue record id: [comment record ids]} from the last sync, or {} without a state folder."""
+    if path is None:
+        return {}
+    try:
+        with open(path, encoding="utf-8") as handle:
+            loaded = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def save_comment_ids(path, known):
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(path.name + ".partial")
+    with open(partial, "w", encoding="utf-8") as handle:
+        json.dump(known, handle, separators=(",", ":"), sort_keys=True)
+    os.replace(partial, path)
+
+
+def sync_comments(client, queue, known):
+    """List the comments of each queued issue; returns (comments written, issues left for later)."""
+    deadline = time.monotonic() + COMMENT_SECONDS
+    written = 0
+    for index, (parent, repo, number) in enumerate(queue):
+        if time.monotonic() > deadline:
+            log("info", f"{len(queue) - index} issues wait for their comments until the next sync")
+            return written, queue[index:]
+        comments = []
+        try:
+            for page in client.pages(f"/repos/{repo}/issues/{number}/comments", {"per_page": 100}):
+                comments.extend(page)
+        except RateLimited as limited:
+            log("warn", f"{limited}; comments resume on the next sync")
+            return written, queue[index:]
+        except urllib.error.HTTPError as error:
+            if error.code not in (404, 410):
+                raise
+            # The repository went private, was deleted or the issue moved: its comments go too.
+        ids = []
+        for comment in comments:
+            cid = f"comment:{comment['id']}"
+            emit({"upsert": "comment", "external_id": cid, "fields": comment_record(comment, parent)})
+            ids.append(cid)
+            written += 1
+        for cid in known.get(parent, []):
+            if cid not in ids:
+                emit({"delete": "comment", "external_id": cid})
+        emit({"upsert": "item", "external_id": parent, "fields": {"comments": comments_text(comments)}})
+        if ids:
+            known[parent] = ids
+        else:
+            known.pop(parent, None)
+    return written, []
 
 
 def load_cursor(raw):
@@ -287,6 +380,9 @@ def sync(payload):
 
     since = cursor.get("issues_since")
     issues = 0
+    with_comments = token and flag(config, "include_issues", True) and flag(config, "include_comments", True)
+    comment_ids = load_comment_ids(state_file(payload))
+    queue = [entry for entry in cursor.get("comments_pending", []) if isinstance(entry, list) and len(entry) == 3]
     if token and flag(config, "include_issues", True):
         params = {"filter": "all", "state": "all", "sort": "updated", "direction": "asc", "per_page": 100}
         if since:
@@ -294,17 +390,35 @@ def sync(payload):
         try:
             for page in client.pages("/issues", params):
                 for issue in page:
-                    emit({"upsert": "item", "external_id": f"issue:{issue['id']}", "fields": issue_record(issue)})
+                    record = issue_record(issue)
+                    rid = f"issue:{issue['id']}"
+                    emit({"upsert": "item", "external_id": rid, "fields": record})
                     issues += 1
+                    # An issue whose comment count fell to 0 is listed too, to delete the old ones.
+                    if with_comments and (issue.get("comments") or rid in comment_ids) and record["repo"]:
+                        queue.append([rid, record["repo"], issue.get("number")])
                     since = max(since or "", issue.get("updated_at") or "")
         except RateLimited as limited:
             log("warn", f"{limited}; issues resume on the next sync")
 
-    emit({"cursor": json.dumps({"v": CURSOR_VERSION, "repos": seen, "issues_since": since}, separators=(",", ":"))})
+    comments, pending = 0, []
+    if with_comments:
+        unique, listed = [], set()
+        for entry in queue:
+            if entry[0] not in listed:
+                listed.add(entry[0])
+                unique.append(entry)
+        comments, pending = sync_comments(client, unique, comment_ids)
+        save_comment_ids(state_file(payload), comment_ids)
+
+    state = {"v": CURSOR_VERSION, "repos": seen, "issues_since": since}
+    if pending:
+        state["comments_pending"] = pending
+    emit({"cursor": json.dumps(state, separators=(",", ":"))})
     log(
         "info",
         f"{username}: {len(seen)} repositories ({written} written, {len(removed)} removed), "
-        f"{issues} issues and pull requests, {client.requests} requests",
+        f"{issues} issues and pull requests, {comments} comments, {client.requests} requests",
     )
     return 0
 

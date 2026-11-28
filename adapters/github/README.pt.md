@@ -27,12 +27,22 @@ Um registro por item, e o campo `kind` diz de que tipo ele é:
 | `pull_request` | O mesmo para pull requests; os que entraram têm `state` = `merged` | Sim |
 
 Cada registro tem `title`, `body`, `repo`, `number`, `state`, `author`, `labels`, `url`, `created` e
-`updated`.
+`updated`. Issues e pull requests também têm `comments`: o texto dos comentários, do mais antigo ao
+mais novo, para a busca achar uma issue pelo que foi dito nela.
+
+Com um token, cada comentário também vira um registro `comment` que pertence à sua issue ou pull
+request, com `body`, `author`, `url`, `created` e `updated`. Desligue isso em **Comentários** para
+economizar requisições. Comentários de revisão nas linhas do diff de um pull request ficam de fora.
 
 Toda sincronização lista os seus repositórios de novo (uma requisição a cada 100) e remove os que
 você apagou ou tirou a estrela. Issues e pull requests chegam de forma incremental: só os que mudaram
-desde a última sincronização. Sem token, o GitHub permite 60 requisições por hora; quando o limite
-chega, a sincronização para e continua na próxima.
+desde a última sincronização. Uma issue que mudou tem os comentários listados de novo (uma requisição a
+cada 100 comentários), e é assim que comentários editados e apagados são notados. Sem token, o
+GitHub permite 60 requisições por hora, com token 5.000; quando o limite chega, a sincronização para
+e continua na próxima. A primeira sincronização de uma conta com milhares de issues lista
+comentários por no máximo 10 minutos e continua nas seguintes. Uma fonte criada antes da 1.1.0
+guarda os comentários, mas o índice de busca dela só passa a lê-los depois que a fonte é adicionada
+de novo.
 
 ## Privacidade
 

@@ -27,12 +27,21 @@ One record per item, with `kind` telling them apart:
 | `pull_request` | The same for pull requests; merged ones have `state` = `merged` | Yes |
 
 Each record has `title`, `body`, `repo`, `number`, `state`, `author`, `labels`, `url`, `created`
-and `updated`.
+and `updated`. Issues and pull requests also have `comments`: the text of their comments, oldest
+first, so search finds an issue by what was said in it.
+
+With a token, each comment is also a `comment` record that belongs to its issue or pull request,
+with `body`, `author`, `url`, `created` and `updated`. Turn this off with **Comments** to save
+requests. Review comments on lines of a pull request's diff are not included.
 
 Every sync lists your repositories again (one request per 100) and drops the ones you deleted or
 unstarred. Issues and pull requests come incrementally: only the ones updated since the last sync.
-Without a token GitHub allows 60 requests an hour; when the limit is reached the sync stops and
-resumes on the next run.
+An issue that changed has its comments listed again (one request per 100 comments), which is how
+edited and deleted comments are noticed. Without a token GitHub allows 60 requests an hour, with
+one 5,000; when the limit is reached the sync stops and resumes on the next run. The first sync of
+an account with thousands of issues lists comments for at most 10 minutes and continues on the
+next syncs. A source added before 1.1.0 stores the comments but its search index only reads them
+after the source is added again.
 
 ## Privacy
 
