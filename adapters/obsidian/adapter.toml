@@ -8,7 +8,7 @@ its frontmatter tags and aliases, inline #tags, folder, dates and word count, an
 notes it points at through [[wikilinks]] or Markdown links. Syncs read only the notes that \
 changed and remove the ones you deleted. Nothing leaves your computer.\
 """
-version = "1.1.2"
+version = "1.1.3"
 author = "WingDrive"
 license = "Apache-2.0"
 homepage = "https://github.com/bernardopg/wingdrive-adapters/tree/main/adapters/obsidian"

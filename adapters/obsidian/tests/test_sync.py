@@ -240,18 +240,21 @@ class IncrementalSync(VaultTest):
 
 
 class Detect(unittest.TestCase):
-    def test_suggests_known_vaults_most_recent_first(self):
+    def test_suggests_known_vaults_with_their_obsidian_folder_most_recent_first(self):
         with tempfile.TemporaryDirectory() as home:
             a = pathlib.Path(home) / "Notes"
             b = pathlib.Path(home) / "Work"
-            a.mkdir()
-            b.mkdir()
+            (a / ".obsidian").mkdir(parents=True)
+            (b / ".obsidian").mkdir(parents=True)
+            # Still listed by Obsidian, but its .obsidian folder is gone: not a vault any more.
+            (pathlib.Path(home) / "Plain").mkdir()
             config = pathlib.Path(home) / ".config" / "obsidian"
             config.mkdir(parents=True)
             (config / "obsidian.json").write_text(json.dumps({"vaults": {
                 "1": {"path": str(a), "ts": 100},
                 "2": {"path": str(b), "ts": 200},
                 "3": {"path": str(pathlib.Path(home) / "Gone"), "ts": 300},
+                "4": {"path": str(pathlib.Path(home) / "Plain"), "ts": 400},
             }}))
             env = {"PATH": os.environ.get("PATH", ""), "HOME": home, "USERPROFILE": home}
             if sys.platform == "win32":
