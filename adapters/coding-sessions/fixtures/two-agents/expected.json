@@ -1,0 +1,12 @@
+{
+  "counts": {"session": 2},
+  "records": [
+    {"model": "session", "external_id": "claude:c1",
+     "fields": {"title": "Fix the parser", "agent": "Claude Code", "project": "/home/ana/notes",
+                "branch": "main", "prompts": 1, "tools": "Edit", "files": "/home/ana/notes/parse.py",
+                "body": "## You\nThe parser drops the last line. My token is [secret] if you need it.\n\n## Agent\nFound it: the loop stops one line early."}},
+    {"model": "session", "external_id": "codex:rollout-x9",
+     "fields": {"title": "Add a dark theme to the site", "agent": "Codex", "project": "/home/ana/site",
+                "branch": "dev", "files": "site/style.css"}}
+  ]
+}

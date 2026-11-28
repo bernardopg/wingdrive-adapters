@@ -1,0 +1,6 @@
+{
+  "id": "coding-sessions",
+  "trust": "official",
+  "source": { "type": "local", "path": "adapters/coding-sessions" },
+  "maintainers": ["bernardopg"]
+}
